@@ -14,12 +14,12 @@ no shared relay to block.
 
 ## Hosting (one time, ~5 minutes)
 
-1. Create a new GitHub repository (suggested name: `natsirt` — keep it neutral).
+1. Create a new GitHub repository (the live one for this app is `natsirt-app` — keep it neutral).
 2. Upload the contents of this folder (the `gh-pages/` output) to the repo's `main` branch.
 3. In the repo: **Settings → Pages → Source: Deploy from a branch → branch: `main` / root → Save**.
-4. Wait ~1 minute; the site is live at `https://<username>.github.io/natsirt/`.
+4. Wait ~1 minute; the site is live at `https://<username>.github.io/natsirt-app/`.
 5. In `public/update.js` of the app source, set `DEFAULT_URL` to
-   `https://<username>.github.io/natsirt/update.json` and rebuild — then fresh
+   `https://<username>.github.io/natsirt-app/update.json` and rebuild — then fresh
    installs self-update with zero configuration.
 
 ## Publishing a future release
