@@ -1394,17 +1394,69 @@ function mseEvict(s) {
   } catch { /* ignore */ }
 }
 
+// Pin a plain <audio> fallback to the relay's MUXED (video+audio) stream: the
+// on-device relay then routes EVERY media-stack range request straight to the
+// muxed CDN URL — which serves proper 206 range responses (seekable), instead
+// of re-hitting the CDN-capped audio-only URL. Other relays ignore the param.
+// Only relay stream endpoints understand it — a direct piped/innertube URL
+// must never get a bogus query param tacked on.
+function muxedStreamUrl(url) {
+  if (!url || !url.includes('/stream')) return url;
+  return url + (url.includes('?') ? '&' : '?') + 'muxed=1';
+}
+
+// Seek a plain <audio> element once it CAN be seeked. The muxed-fallback
+// stream only becomes seekable after the media stack parses the init (moov at
+// the file tail) — before that, seekable is empty and setting currentTime
+// makes this WebView RELOAD FROM 0 (the bug). Apply immediately when the
+// range is already seekable, otherwise poll briefly and apply as soon as it
+// is. Never resets playback — the seek either lands or is quietly dropped.
+function seekAudioQueued(el, target, timeoutMs = 8000) {
+  if (!el || !Number.isFinite(target) || target < 0) return;
+  // Generation token: a newer queued seek (or a fresh session on this element)
+  // invalidates any older poller still running, so overlapping slider events
+  // never fight over the playhead.
+  const token = (el._seekTok = (el._seekTok || 0) + 1);
+  const apply = () => {
+    try {
+      // Only the latest queued seek may land, and only while this element is
+      // still the active player (a track change / crossfade swap must not get
+      // yanked to a stale position).
+      if (el._seekTok !== token || el !== curEl()) return false;
+      if (el.seekable && el.seekable.length > 0) {
+        const last = el.seekable.length - 1;
+        const start = el.seekable.start(0);
+        const end = el.seekable.end(last);
+        if (target >= start && target <= end) { el.currentTime = target; return true; }
+        if (target > end) { el.currentTime = end; return true; }
+      }
+    } catch { /* ignore */ }
+    return false;
+  };
+  if (apply()) return;
+  const t0 = Date.now();
+  const timer = setInterval(() => {
+    if (apply() || Date.now() - t0 > timeoutMs) clearInterval(timer);
+  }, 250);
+}
+
 // Hand the ACTIVE MSE session off to the plain <audio> element at the current
 // position. Used when MSE truly can't continue: the relay answered the
 // whole-file muxed stream (CDN-capped audio-only URL — plain audio decodes
-// muxed MP4s, MSE can't), or the one MSE retry for a transient blip failed.
-function mseHandoff(s) {
+// muxed MP4s, MSE can't), or the MSE retry for a transient blip failed.
+// forceMuxed pins the element to the muxed stream (seekable ranges); plain
+// keeps the lighter audio-only URL for genuinely uncapped tracks.
+function mseHandoff(s, forceMuxed = false) {
   const el = s.el;
   const pos = el.currentTime;
   mseTeardown(el);
-  try { el.src = s.url; el.load(); el.currentTime = pos; } catch { /* ignore */ }
+  const src = forceMuxed ? muxedStreamUrl(s.url) : s.url;
+  try { el.src = src; el.load(); } catch { /* ignore */ }
   setBuffering(true);
   el.play().catch(() => { /* plain-audio error listener takes over */ });
+  // A direct currentTime set on the freshly-loaded stream would restart from 0
+  // (empty seekable) — queue it so the handoff lands where playback was.
+  seekAudioQueued(el, pos);
 }
 
 // Retry the ACTIVE MSE session once with a fresh signed URL so a brief network
@@ -1429,7 +1481,12 @@ async function mseRetryOnce(s) {
     // mseStart tears the old session down and starts its own scheduler.
     await mseStart(s.el, track, stream.url, { play: true, seekTo: pos });
     return true;
-  } catch { return false; }
+  } catch (e) {
+    // A fresh URL that is ALSO CDN-capped hands the relay's muxed stream to
+    // mseStart, which can't parse it — callers pin the handoff to the muxed
+    // (range-capable) stream instead of the capped audio-only URL.
+    return String((e && e.message) || '').includes('Muxed') ? 'muxed' : false;
+  }
 }
 
 // Buffer scheduler: refill when the lookahead dips below REFILL_AHEAD.
@@ -1464,16 +1521,21 @@ function mseSchedule(s) {
           }
           if ((state.mseRetries || 0) < 2) {
             state.mseRetries = (state.mseRetries || 0) + 1;
-            if (await mseRetryOnce(s)) return; // new session's scheduler takes over
-            // Retry failed. If the user switched tracks during the await, the
-            // element now belongs to the new track — back off and let it play.
-            // On the SAME track, hand off to plain <audio> (a capped fresh URL
-            // can't feed MSE — the relay serves the muxed stream instead).
-            if (state.playingId !== s.track.id) return;
+            const retry = await mseRetryOnce(s);
+            if (retry === true) return; // new session's scheduler takes over
+            // Retry failed. If the user switched tracks OR started a fresh
+            // session (seek) during the await, the element now belongs to that
+            // new playback — back off and let it play. On the SAME session,
+            // hand off to plain <audio>. A 'muxed' retry result means the
+            // fresh URL was ALSO CDN-capped — pin the handoff to the
+            // range-capable muxed stream so seeks keep working.
+            if (state.playingId !== s.track.id || state.mse !== s) return;
+            mseHandoff(s, retry === 'muxed');
+            return;
           }
-          mseHandoff(s);
+          mseHandoff(s, false);
         } else if (isActive) {
-          mseHandoff(s);
+          mseHandoff(s, true); // CDN cap — the muxed stream is the only source
         } else {
           mseTeardown(s.el);
         }
@@ -2191,16 +2253,22 @@ function seekPlayerTo(sec) {
     const wasPaused = el.paused;
     mseTeardown(el);
     mseStart(el, track, url, { play: !wasPaused, seekTo: target }).catch(() => {
-      // Mid-track MSE restart failed (init/append hiccup, far seek beyond the
-      // refill guard): fall back to plain <audio> so the seek still lands
-      // instead of leaving a dead MediaSource blob on the element.
+      // Mid-track MSE restart failed — usually because the audio-only URL is
+      // CDN-capped past ~1MB and the relay serves the muxed stream (which MSE
+      // can't parse). Fall back to plain <audio> on the MUXED stream — the
+      // relay serves it as real 206 range responses, so the seek lands.
       try { mseTeardown(el); } catch { /* ignore */ }
-      try { el.src = url; el.load(); el.currentTime = Math.max(0, Math.min(target, el.duration || target)); } catch { /* ignore */ }
+      const murl = muxedStreamUrl(url);
+      try { el.src = murl; el.load(); } catch { /* ignore */ }
       if (!wasPaused) el.play().catch(() => { /* error listener takes over */ });
+      seekAudioQueued(el, target);
     });
     return;
   }
-  el.currentTime = target;
+  // Plain <audio> path. The muxed-fallback stream is range-capable but only
+  // seekable once the init is parsed — a direct set on an empty seekable
+  // range makes this WebView reload from 0. Queue the seek instead.
+  seekAudioQueued(el, target);
 }
 
 on('#seek', 'change', () => {
