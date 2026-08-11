@@ -1309,8 +1309,9 @@ const MSE_CFG = {
 
 const mseCodec = (ct) => {
   const t = String(ct || '').toLowerCase();
-  if (t.includes('mp4')) return { audio: 'audio/mp4; codecs="mp4a.40.2"', muxed: 'video/mp4; codecs="avc1.4d401e,mp4a.40.2"' };
-  if (t.includes('webm')) return { audio: 'audio/webm; codecs="opus"', muxed: 'video/webm; codecs="vp9,opus"' };
+  // Audio-only codecs only — the app never streams video.
+  if (t.includes('mp4')) return { audio: 'audio/mp4; codecs="mp4a.40.2"' };
+  if (t.includes('webm')) return { audio: 'audio/webm; codecs="opus"' };
   return null;
 };
 

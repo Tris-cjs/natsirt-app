@@ -215,8 +215,8 @@ window.MusicEngine = (() => {
   // The relay whose stream endpoint the <audio> element should follow.
   // The on-device relay (loopback) is always preferred when healthy — it
   // resolves from this phone's own IP with zero external dependencies, and now
-  // streams full tracks reliably (curl fallback for the bot-check + muxed
-  // video formats for the CDN's audio-only cap). Failing that, the PC relays
+  // streams full tracks reliably (curl fallback for the bot-check; strictly
+  // audio-only — no video formats ever). Failing that, the PC relays
   // (http:// — LAN or Tailscale, both backed by yt-dlp) are next; the
   // Cloudflare Worker (https://) handles search/chart but its /stream is
   // datacenter-bot-blocked, so it's never used for audio.
@@ -574,9 +574,10 @@ window.MusicEngine = (() => {
   // High-quality first: the player streams a strict short lookahead buffer
   // (10-15s of byte ranges via MSE), so startup no longer trades quality for
   // speed — prefer the richest audio the video offers. 141 = 256kbps AAC,
-  // 140 = 128kbps AAC, 251 = 160kbps opus; the low formats (139/249/250)
+  // 251 = 160kbps opus, 140 = 128kbps AAC; the low formats (139/249/250)
   // remain as last-resort fallbacks for videos that only offer them.
-  const ITAG_PREF = [141, 140, 251, 250, 249, 599, 600, 139];
+  // Audio-only only — never muxed video+audio.
+  const ITAG_PREF = [141, 251, 140, 250, 249, 599, 600, 139];
   function pickAudioFormat(adaptiveFormats) {
     const audio = (adaptiveFormats || []).filter((f) => f.url && f.mimeType && f.mimeType.startsWith('audio/'));
     if (!audio.length) return null;
