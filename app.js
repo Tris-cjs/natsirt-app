@@ -55,6 +55,8 @@ const state = {
   audio2: new Audio(),// overlap/crossfade partner (10s gapless handoff)
   activeEl: null,     // which element is currently the "now playing" one
   playingId: null,
+  mseRetries: 0,      // MSE transient-failure retries used for the current track
+  mseRetryFor: null,  // playingId the mseRetries budget belongs to (auto-resets)
   liked: [],          // liked videos (local)
   playlists: [],      // { id, name, tracks: [] } (local)
   searching: false,
@@ -1327,6 +1329,18 @@ function mseTeardown(el) {
   if (state.mse === s) state.mse = null;
 }
 
+// Append a buffer to the SourceBuffer, resolving on updateend (or rejecting on
+// an error). Used for init segments and media chunks alike.
+function mseAppend(s, buf) {
+  return new Promise((resolve, reject) => {
+    const done = () => { s.sb.removeEventListener('updateend', done); s.sb.removeEventListener('error', fail); resolve(); };
+    const fail = () => { s.sb.removeEventListener('updateend', done); s.sb.removeEventListener('error', fail); reject(new Error('SourceBuffer append failed')); };
+    s.sb.addEventListener('updateend', done);
+    s.sb.addEventListener('error', fail);
+    try { s.sb.appendBuffer(buf); } catch (e) { s.sb.removeEventListener('updateend', done); s.sb.removeEventListener('error', fail); reject(e); }
+  });
+}
+
 // Fetch one byte range from the stream URL and append it to the SourceBuffer.
 async function mseFetchChunk(s, startByte) {
   if (s.dead) return;
@@ -1353,13 +1367,7 @@ async function mseFetchChunk(s, startByte) {
   const buf = await res.arrayBuffer();
   if (s.dead || !s.sb) return;
   s.chunkSeq++;
-  await new Promise((resolve, reject) => {
-    const done = () => { s.sb.removeEventListener('updateend', done); s.sb.removeEventListener('error', fail); resolve(); };
-    const fail = () => { s.sb.removeEventListener('updateend', done); s.sb.removeEventListener('error', fail); reject(new Error('SourceBuffer append failed')); };
-    s.sb.addEventListener('updateend', done);
-    s.sb.addEventListener('error', fail);
-    try { s.sb.appendBuffer(buf); } catch (e) { s.sb.removeEventListener('updateend', done); s.sb.removeEventListener('error', fail); reject(e); }
-  });
+  await mseAppend(s, buf);
   s.loadedEnd = to + 1;
   if (s.loadedEnd >= s.total) mseMaybeEnd(s);
 }
@@ -1386,6 +1394,44 @@ function mseEvict(s) {
   } catch { /* ignore */ }
 }
 
+// Hand the ACTIVE MSE session off to the plain <audio> element at the current
+// position. Used when MSE truly can't continue: the relay answered the
+// whole-file muxed stream (CDN-capped audio-only URL — plain audio decodes
+// muxed MP4s, MSE can't), or the one MSE retry for a transient blip failed.
+function mseHandoff(s) {
+  const el = s.el;
+  const pos = el.currentTime;
+  mseTeardown(el);
+  try { el.src = s.url; el.load(); el.currentTime = pos; } catch { /* ignore */ }
+  setBuffering(true);
+  el.play().catch(() => { /* plain-audio error listener takes over */ });
+}
+
+// Retry the ACTIVE MSE session once with a fresh signed URL so a brief network
+// blip doesn't permanently drop the strict 10-15s bounded buffer. Invalidates
+// the stream (the relay signs a new URL — fresh URLs are often uncapped) and
+// restarts MSE from the current position. Returns true if a new session is
+// running; false if the retry couldn't start (caller hands off to plain audio).
+async function mseRetryOnce(s) {
+  const track = s.track;
+  const vid = track && (track.videoId || String(track.id || '').replace('yt:', ''));
+  if (!vid || !window.MusicEngine || s.dead || state.mse !== s) return false;
+  try {
+    const raw = s.el.currentTime;
+    const pos = (Number.isFinite(raw) && raw > 0) ? Math.min(s.duration || 0, raw) : 0;
+    // Re-buffering MSE from byte 0 up to a late position downloads MORE than
+    // the plain <audio> fallback (which streams only the remainder) — past the
+    // halfway point, hand off instead of re-buffering.
+    if ((track.duration || 0) > 0 && pos > (track.duration / 2)) return false;
+    MusicEngine.invalidateStream(vid);
+    const stream = await MusicEngine.streamUrl(vid);
+    if (state.playingId !== track.id || state.mse !== s || s.dead) return false;
+    // mseStart tears the old session down and starts its own scheduler.
+    await mseStart(s.el, track, stream.url, { play: true, seekTo: pos });
+    return true;
+  } catch { return false; }
+}
+
 // Buffer scheduler: refill when the lookahead dips below REFILL_AHEAD.
 function mseSchedule(s) {
   const tick = async () => {
@@ -1400,19 +1446,34 @@ function mseSchedule(s) {
         await mseFetchChunk(s, s.loadedEnd);
         setTimeout(tick, MSE_CFG.POLL_MS);
       } catch (e) {
-        // Stream hiccup (relay throttled / range 403 / CDN cap). For the ACTIVE
-        // session, hand off to the plain <audio> element at the current position
-        // instead of erroring: uncapped tracks resume in place via audio-only
-        // ranges, and CDN-capped tracks (audio-only URLs 403 past ~1MB on many
-        // edge nodes) get the relay's whole-file muxed stream — plain audio
-        // decodes muxed MP4s, MSE can't. Partner/preload sessions just give up
-        // quietly; the next play() re-resolves a fresh stream.
-        if (state.mse === s) {
-          const pos = s.el.currentTime;
-          mseTeardown(s.el);
-          try { s.el.src = s.url; s.el.load(); s.el.currentTime = pos; } catch { /* ignore */ }
-          setBuffering(true);
-          s.el.play().catch(() => { /* plain-audio error listener takes over */ });
+        // Classify the failure:
+        //   • CDN cap — the relay answered the whole-file muxed stream (HTTP
+        //     200 to a byte-range request) because the audio-only URL is capped
+        //     past ~1MB on this edge. MSE can't parse it; hand off NOW.
+        //   • Transient — network blip, relay 5xx/throttle, append hiccup.
+        //     Retry MSE once with a fresh signed URL (bounded per track) so the
+        //     strict 10-15s buffer survives brief glitches; hand off only if
+        //     that retry also fails. Partner/preload sessions just give up.
+        const capped = String((e && e.message) || '').includes('Muxed');
+        const isActive = state.mse === s;
+        if (isActive && !capped) {
+          // Fresh retry budget whenever a new track becomes current.
+          if (state.mseRetryFor !== state.playingId) {
+            state.mseRetryFor = state.playingId;
+            state.mseRetries = 0;
+          }
+          if ((state.mseRetries || 0) < 2) {
+            state.mseRetries = (state.mseRetries || 0) + 1;
+            if (await mseRetryOnce(s)) return; // new session's scheduler takes over
+            // Retry failed. If the user switched tracks during the await, the
+            // element now belongs to the new track — back off and let it play.
+            // On the SAME track, hand off to plain <audio> (a capped fresh URL
+            // can't feed MSE — the relay serves the muxed stream instead).
+            if (state.playingId !== s.track.id) return;
+          }
+          mseHandoff(s);
+        } else if (isActive) {
+          mseHandoff(s);
         } else {
           mseTeardown(s.el);
         }
@@ -1463,14 +1524,54 @@ async function mseStart(el, track, url, opts = {}) {
   const sb = ms.addSourceBuffer(candidate);
   sb.mode = 'segments';
   s.sb = sb;
-  // First chunk: bytes 0 → FIRST_CHUNK_SEC (playback starts at 0).
+  // First chunk(s). A fresh session starting at 0 fetches bytes 0 →
+  // FIRST_CHUNK_SEC, which carries the init segment. A MID-TRACK session start
+  // (seek outside the window / MSE retry) needs the init segment (moov / EBML
+  // header — always at byte 0) BEFORE any mid-file data, or the SourceBuffer
+  // can't decode it. Append a bounded init window (bytes 0 → 256 KB) first,
+  // then chunk CONTIGUOUSLY from the init window end — this WebView's MSE
+  // rejects appends that don't tile onto the existing buffered data (a gap
+  // fails with a SourceBuffer error). The seek position lands inside the
+  // buffer once the scheduler refills up to it.
   const startByte = Math.max(0, Math.floor((opts.seekTo || 0) * s.bps));
-  await mseFetchChunk(s, startByte);
+  if (startByte > 0) {
+    const initEnd = Math.min(s.total, 256 * 1024);
+    const initRes = await fetch(s.url, { credentials: 'omit', headers: { Range: `bytes=0-${initEnd - 1}` } });
+    if (initRes.status === 200) {
+      try { if (initRes.body && initRes.body.cancel) initRes.body.cancel(); } catch { /* ignore */ }
+      throw new Error('Muxed whole-file fallback');
+    }
+    if (!initRes.ok && initRes.status !== 416) throw new Error(`stream init HTTP ${initRes.status}`);
+    if (initRes.ok) {
+      const initBuf = await initRes.arrayBuffer();
+      if (!s.dead && s.sb) await mseAppend(s, initBuf);
+      s.loadedEnd = Math.max(s.loadedEnd, initEnd);
+    }
+    await mseFetchChunk(s, initEnd);
+    // Appends must tile contiguously, so the only way to reach a mid-track
+    // target is to refill forward from the start. Do it here (bounded) so the
+    // target is INSIDE the buffer before currentTime is set — seeking to an
+    // unbuffered time makes this WebView abort play() with "interrupted by a
+    // new load request".
+    let guard = 0;
+    while (s.loadedEnd < startByte && guard < 16) {
+      await mseFetchChunk(s, s.loadedEnd);
+      guard++;
+    }
+  } else {
+    await mseFetchChunk(s, startByte);
+  }
   const seekTo = Math.min(s.duration, opts.seekTo || 0);
   try { el.currentTime = seekTo; } catch { /* ignore */ }
   if (opts.play !== false) {
     setBuffering(true);
-    await el.play();
+    try { await el.play(); } catch {
+      // A first play() can be aborted while the media pipeline settles after a
+      // seek; one quick retry covers it. If it fails again it propagates and
+      // the caller falls back to plain <audio>.
+      await new Promise((r) => setTimeout(r, 250));
+      await el.play();
+    }
   }
   if (state.playingId === track.id) state.mse = s; // only the active session
   mseSchedule(s);
@@ -2089,7 +2190,14 @@ function seekPlayerTo(sec) {
     const track = s.track, url = s.url;
     const wasPaused = el.paused;
     mseTeardown(el);
-    mseStart(el, track, url, { play: !wasPaused, seekTo: target }).catch(() => {});
+    mseStart(el, track, url, { play: !wasPaused, seekTo: target }).catch(() => {
+      // Mid-track MSE restart failed (init/append hiccup, far seek beyond the
+      // refill guard): fall back to plain <audio> so the seek still lands
+      // instead of leaving a dead MediaSource blob on the element.
+      try { mseTeardown(el); } catch { /* ignore */ }
+      try { el.src = url; el.load(); el.currentTime = Math.max(0, Math.min(target, el.duration || target)); } catch { /* ignore */ }
+      if (!wasPaused) el.play().catch(() => { /* error listener takes over */ });
+    });
     return;
   }
   el.currentTime = target;
