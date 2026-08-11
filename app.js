@@ -1392,10 +1392,22 @@ function mseSchedule(s) {
         await mseFetchChunk(s, s.loadedEnd);
         setTimeout(tick, MSE_CFG.POLL_MS);
       } catch (e) {
-        // Stream hiccup (relay throttled / range 403 / CDN cap): tear down and
-        // let the normal retry machinery handle it (fresh URL → fallbacks).
-        mseTeardown(s.el);
-        try { s.el.dispatchEvent(new Event('error')); } catch { /* ignore */ }
+        // Stream hiccup (relay throttled / range 403 / CDN cap). For the ACTIVE
+        // session, hand off to the plain <audio> element at the current position
+        // instead of erroring: uncapped tracks resume in place via audio-only
+        // ranges, and CDN-capped tracks (audio-only URLs 403 past ~1MB on many
+        // edge nodes) get the relay's whole-file muxed stream — plain audio
+        // decodes muxed MP4s, MSE can't. Partner/preload sessions just give up
+        // quietly; the next play() re-resolves a fresh stream.
+        if (state.mse === s) {
+          const pos = s.el.currentTime;
+          mseTeardown(s.el);
+          try { s.el.src = s.url; s.el.load(); s.el.currentTime = pos; } catch { /* ignore */ }
+          setBuffering(true);
+          s.el.play().catch(() => { /* plain-audio error listener takes over */ });
+        } else {
+          mseTeardown(s.el);
+        }
       } finally {
         s.fetching = false;
       }
