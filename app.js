@@ -1428,8 +1428,13 @@ async function mseStart(el, track, url, opts = {}) {
   const cr = (probe.headers.get('content-range') || '').match(/\/(\d+)\s*$/);
   s.total = cr ? Number(cr[1]) : 0;
   const ct = probe.headers.get('content-type') || 'audio/mp4';
+  // Muxed video+audio streams can't feed MSE: YouTube's progressive MP4s keep
+  // the moov box at the END of the file, so appending byte ranges from byte 0
+  // yields no init segment (sbBufferedRanges stays 0, playback never starts).
+  // The plain <audio> fallback in playTrackAt handles them just fine.
+  if (ct.includes('video')) throw new Error('Muxed stream');
   const codecs = mseCodec(ct);
-  const candidate = ct.includes('video') && codecs ? codecs.muxed : (codecs ? codecs.audio : null);
+  const candidate = codecs ? codecs.audio : null;
   if (!candidate || !MediaSource.isTypeSupported(candidate)) throw new Error('Unsupported stream type');
   if (!(s.total > 0)) throw new Error('Unknown stream size');
   s.type = candidate;
