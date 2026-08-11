@@ -1,20 +1,18 @@
-# Natsirt — music player
+# natsirt-app
 
-Standalone music player that streams from the web. No account, no server, no tracking.
-Each phone talks directly to the streaming service from its own connection, so there is
-no shared relay to block.
+Private Android application project. Keep this repo's description neutral.
 
-## What's in this repo
+## Repository contents
 
 | File | Purpose |
 |---|---|
-| `Natsirt-v58.apk` | The installable app (~1 MB) |
-| `index.html` | One-page install note served as the site's home page |
-| `update.json` + `engine.js` `brain.js` `app.js` `style.css` | Self-update bundle: the app checks this manifest and hot-swaps newer code without a reinstall |
+| `Natsirt-v62.apk` | Release build |
+| `index.html` | Minimal site page |
+| `update.json` + `engine.js` `brain.js` `app.js` `style.css` | Self-update bundle (installed apps replace their web assets from this) |
 
-## Hosting (one time, ~5 minutes)
+## Hosting
 
-1. Create a new GitHub repository (the live one for this app is `natsirt-app` — keep it neutral).
+1. Create a new GitHub repository (`natsirt-app`).
 2. Upload the contents of this folder (the `gh-pages/` output) to the repo's `main` branch.
 3. In the repo: **Settings → Pages → Source: Deploy from a branch → branch: `main` / root → Save**.
 4. Wait ~1 minute; the site is live at `https://<username>.github.io/natsirt-app/`.
@@ -35,6 +33,5 @@ pick up the new build automatically through `update.json`.
 
 ## If the site is ever taken down
 
-Nothing uninstalls from anyone's phone. Re-host this folder on any static host
-(Cloudflare Pages, Netlify, a bucket) and the only thing to repoint is the update
-URL inside the app. Keep a copy of this folder somewhere safe.
+Re-host this folder on any static host and repoint the update URL inside the app.
+Keep a copy of this folder somewhere safe.

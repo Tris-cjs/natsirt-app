@@ -571,12 +571,12 @@ window.MusicEngine = (() => {
     return [...seen.values()];
   }
 
-  // Fast-loading first: prefer the LOWEST-bitrate audio (itag 139 = 48kbps
-  // m4a, 249/250 = 50/70kbps opus) so songs start nearly instantly and the
-  // crossfade preload buffers in a blink — this is a phone-speaker app, not
-  // an audiophile rig. 140/251 (128/160kbps) are kept as fallbacks for
-  // videos that don't offer the low formats.
-  const ITAG_PREF = [139, 249, 250, 140, 251, 599, 600];
+  // High-quality first: the player streams a strict short lookahead buffer
+  // (10-15s of byte ranges via MSE), so startup no longer trades quality for
+  // speed — prefer the richest audio the video offers. 141 = 256kbps AAC,
+  // 140 = 128kbps AAC, 251 = 160kbps opus; the low formats (139/249/250)
+  // remain as last-resort fallbacks for videos that only offer them.
+  const ITAG_PREF = [141, 140, 251, 250, 249, 599, 600, 139];
   function pickAudioFormat(adaptiveFormats) {
     const audio = (adaptiveFormats || []).filter((f) => f.url && f.mimeType && f.mimeType.startsWith('audio/'));
     if (!audio.length) return null;
@@ -584,8 +584,8 @@ window.MusicEngine = (() => {
       const hit = audio.find((f) => Number(f.itag) === itag);
       if (hit) return hit;
     }
-    // No preferred itag offered — take the SMALLEST stream (fastest load).
-    return audio.sort((a, b) => (a.bitrate || 0) - (b.bitrate || 0))[0];
+    // No preferred itag offered — take the HIGHEST-bitrate stream.
+    return audio.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
   }
 
   /* ------------------------------ source: relays ------------------------------ */

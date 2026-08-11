@@ -1284,6 +1284,173 @@ on('#foryou-reset', 'click', () => {
   loadForYou();
 });
 
+/* ------------------------------ MSE bounded-buffer playback ------------------------------ */
+
+// High-quality, data-frugal playback: instead of handing the whole track to
+// <audio> (the browser buffers as much as it wants), the app plays through a
+// MediaSource fed by EXCLUSIVE byte-range requests from the high-quality
+// stream URL. Only a strict 10-15s lookahead window is ever buffered:
+//   • first chunk: bytes 0 → 15s (playback starts at 0)
+//   • refill: when less than ~6s remains buffered ahead, fetch the next ~12s
+//     range (never starting below the 3s mark, except the very first chunk)
+//   • evict: buffered data beyond 15s ahead (and before 2s behind) is dropped
+//   • seek: outside the window → clear + re-chunk from the new position
+// The stream URL still goes through the relay (Range-aware), so no whole-track
+// download ever happens and the seek line shows the real short buffer.
+const MSE_CFG = {
+  CHUNK_SEC: 12,       // bytes per refill chunk ≈ 12s of audio
+  FIRST_CHUNK_SEC: 15, // the very first chunk covers 0 → 15s
+  REFILL_AHEAD: 6,     // fetch more when less than this much is buffered ahead
+  MAX_AHEAD: 15,       // never keep more than this much buffered ahead
+  KEEP_BACK: 2,        // keep this much behind currentTime (tiny seek-backs)
+  MIN_START_SEC: 3,    // no refill chunk begins below this offset (chunk 1 excepted)
+  POLL_MS: 400,        // buffer scheduler tick
+};
+
+const mseCodec = (ct) => {
+  const t = String(ct || '').toLowerCase();
+  if (t.includes('mp4')) return { audio: 'audio/mp4; codecs="mp4a.40.2"', muxed: 'video/mp4; codecs="avc1.4d401e,mp4a.40.2"' };
+  if (t.includes('webm')) return { audio: 'audio/webm; codecs="opus"', muxed: 'video/webm; codecs="vp9,opus"' };
+  return null;
+};
+
+// Abort any running MSE session on an element and free its MediaSource.
+function mseTeardown(el) {
+  const s = el && el._mse;
+  if (!s) return;
+  s.dead = true;
+  try { if (s.ms && s.ms.readyState === 'open') s.ms.endOfStream(); } catch { /* ignore */ }
+  try { if (s.msUrl) URL.revokeObjectURL(s.msUrl); } catch { /* ignore */ }
+  try { el.removeAttribute('src'); el.load(); } catch { /* ignore */ }
+  el._mse = null;
+  if (state.mse === s) state.mse = null;
+}
+
+// Fetch one byte range from the stream URL and append it to the SourceBuffer.
+async function mseFetchChunk(s, startByte) {
+  if (s.dead) return;
+  if (startByte >= s.total) { s.loadedEnd = s.total; mseMaybeEnd(s); return; }
+  // Refill chunks never begin below the 3s mark (the first chunk starts at 0).
+  const minStart = Math.floor(s.bps * MSE_CFG.MIN_START_SEC);
+  const from = Math.max(startByte, s.chunkSeq > 0 ? minStart : 0);
+  if (from >= s.total) { s.loadedEnd = s.total; mseMaybeEnd(s); return; }
+  // Byte ranges must be whole numbers — a float like bytes=0-194228.69 is a
+  // malformed Range header and the WebView rejects it ("Failed to fetch").
+  const chunkBytes = Math.max(64 * 1024, Math.floor(s.bps * MSE_CFG.CHUNK_SEC));
+  const to = Math.min(s.total - 1, Math.floor(from + chunkBytes));
+  const res = await fetch(s.url, { credentials: 'omit', headers: { Range: `bytes=${from}-${to}` } });
+  if (res.status === 416) { s.loadedEnd = s.total; mseMaybeEnd(s); return; }
+  if (!res.ok) throw new Error(`range HTTP ${res.status}`);
+  const buf = await res.arrayBuffer();
+  if (s.dead || !s.sb) return;
+  s.chunkSeq++;
+  await new Promise((resolve, reject) => {
+    const done = () => { s.sb.removeEventListener('updateend', done); s.sb.removeEventListener('error', fail); resolve(); };
+    const fail = () => { s.sb.removeEventListener('updateend', done); s.sb.removeEventListener('error', fail); reject(new Error('SourceBuffer append failed')); };
+    s.sb.addEventListener('updateend', done);
+    s.sb.addEventListener('error', fail);
+    try { s.sb.appendBuffer(buf); } catch (e) { s.sb.removeEventListener('updateend', done); s.sb.removeEventListener('error', fail); reject(e); }
+  });
+  s.loadedEnd = to + 1;
+  if (s.loadedEnd >= s.total) mseMaybeEnd(s);
+}
+
+function mseMaybeEnd(s) {
+  if (s.eos || s.dead || !s.ms) return;
+  s.eos = true;
+  try { if (s.ms.readyState === 'open') s.ms.endOfStream(); } catch { /* ignore */ }
+}
+
+// Keep the buffered window strict: drop data behind KEEP_BACK and beyond MAX_AHEAD.
+function mseEvict(s) {
+  if (!s.sb || s.sb.updating || !s.el || !s.el.buffered) return;
+  const keepStart = Math.max(0, s.el.currentTime - MSE_CFG.KEEP_BACK);
+  const keepEnd = s.el.currentTime + MSE_CFG.MAX_AHEAD;
+  try {
+    for (let i = 0; i < s.sb.buffered.length; i++) {
+      const r = s.sb.buffered.start(i);
+      const e = s.sb.buffered.end(i);
+      if (e <= keepStart || r >= keepEnd) continue;
+      if (r < keepStart) s.sb.remove(r, Math.min(e, keepStart));
+      if (e > keepEnd) s.sb.remove(Math.max(r, keepEnd), e);
+    }
+  } catch { /* ignore */ }
+}
+
+// Buffer scheduler: refill when the lookahead dips below REFILL_AHEAD.
+function mseSchedule(s) {
+  const tick = async () => {
+    if (s.dead || s.eos || !s.el._mse) return;
+    mseEvict(s);
+    if (s.fetching) { setTimeout(tick, MSE_CFG.POLL_MS); return; }
+    const loadedSec = s.bps > 0 ? s.loadedEnd / s.bps : s.duration;
+    const ahead = loadedSec - s.el.currentTime;
+    if (ahead < MSE_CFG.REFILL_AHEAD && loadedSec < s.duration - 0.5) {
+      s.fetching = true;
+      try {
+        await mseFetchChunk(s, s.loadedEnd);
+        setTimeout(tick, MSE_CFG.POLL_MS);
+      } catch (e) {
+        // Stream hiccup (relay throttled / range 403 / CDN cap): tear down and
+        // let the normal retry machinery handle it (fresh URL → fallbacks).
+        mseTeardown(s.el);
+        try { s.el.dispatchEvent(new Event('error')); } catch { /* ignore */ }
+      } finally {
+        s.fetching = false;
+      }
+    } else if (!s.eos) {
+      setTimeout(tick, MSE_CFG.POLL_MS);
+    }
+  };
+  setTimeout(tick, MSE_CFG.POLL_MS);
+}
+
+// Start an MSE session on `el` for `track` using `url` (the relay stream URL).
+// opts: { play, seekTo } — buffers from seekTo (default 0), plays when requested,
+// then keeps a strict 10-15s lookahead via byte ranges until the track ends.
+async function mseStart(el, track, url, opts = {}) {
+  if (!window.MediaSource || !(track.duration > 0)) throw new Error('MSE unavailable');
+  mseTeardown(el);
+  const s = { el, track, url, ms: null, msUrl: null, sb: null, total: 0, duration: track.duration, bps: 0, loadedEnd: 0, chunkSeq: 0, eos: false, dead: false, fetching: false };
+  el._mse = s;
+  const ms = new MediaSource();
+  s.ms = ms;
+  s.msUrl = URL.createObjectURL(ms);
+  el.src = s.msUrl;
+  await new Promise((resolve, reject) => {
+    ms.addEventListener('sourceopen', resolve, { once: true });
+    ms.addEventListener('error', () => reject(new Error('MediaSource error')), { once: true });
+  });
+  // Probe 1 byte to learn the total size + container type (the relay passes
+  // Range through to the CDN, so Content-Range / Content-Type come back).
+  const probe = await fetch(url, { credentials: 'omit', headers: { Range: 'bytes=0-0' } });
+  if (!probe.ok && probe.status !== 206) throw new Error(`stream HTTP ${probe.status}`);
+  const cr = (probe.headers.get('content-range') || '').match(/\/(\d+)\s*$/);
+  s.total = cr ? Number(cr[1]) : 0;
+  const ct = probe.headers.get('content-type') || 'audio/mp4';
+  const codecs = mseCodec(ct);
+  const candidate = ct.includes('video') && codecs ? codecs.muxed : (codecs ? codecs.audio : null);
+  if (!candidate || !MediaSource.isTypeSupported(candidate)) throw new Error('Unsupported stream type');
+  if (!(s.total > 0)) throw new Error('Unknown stream size');
+  s.type = candidate;
+  s.bps = s.total / s.duration;
+  const sb = ms.addSourceBuffer(candidate);
+  sb.mode = 'segments';
+  s.sb = sb;
+  // First chunk: bytes 0 → FIRST_CHUNK_SEC (playback starts at 0).
+  const startByte = Math.max(0, Math.floor((opts.seekTo || 0) * s.bps));
+  await mseFetchChunk(s, startByte);
+  const seekTo = Math.min(s.duration, opts.seekTo || 0);
+  try { el.currentTime = seekTo; } catch { /* ignore */ }
+  if (opts.play !== false) {
+    setBuffering(true);
+    await el.play();
+  }
+  if (state.playingId === track.id) state.mse = s; // only the active session
+  mseSchedule(s);
+  return s;
+}
+
 /* ------------------------------ playback ------------------------------ */
 
 // Playback failure action — retry the current track with a fresh stream.
@@ -1298,9 +1465,11 @@ function cancelCrossfade() {
     clearInterval(state.xfade.timer);
     const { toEl, fromEl } = state.xfade;
     state.xfade = null;
-    try { toEl.pause(); toEl.src = ''; toEl.volume = state.userVol; } catch { /* ignore */ }
+    try { toEl.pause(); mseTeardown(toEl); toEl.volume = state.userVol; } catch { /* ignore */ }
     try { fromEl.volume = state.userVol; } catch { /* ignore */ }
   }
+  mseTeardown(audio);
+  mseTeardown(audio2);
   audio.volume = state.userVol;
   audio2.volume = state.userVol;
   audio.pause();
@@ -1362,10 +1531,27 @@ async function playTrackAt(i, list) {
       throw new Error('No playable source for this track');
     }
     const el = curEl();
-    el.src = src;
-    setBuffering(true);
-    mediaLoadAttempted = true;
-    await el.play();
+    let played = false;
+    // High-quality bounded-buffer path: MSE fed by byte-range requests keeps
+    // only a strict 10-15s lookahead (never buffers the whole track). Falls
+    // back to the plain <audio> element when MSE isn't possible.
+    if (state.playingId === track.id && (track.duration || 0) > 0) {
+      const seekTo = state._pendingSeek != null ? state._pendingSeek : 0;
+      try {
+        await mseStart(el, track, src, { play: true, seekTo });
+        played = true;
+      } catch (e) {
+        mseTeardown(el);
+        // Fresh URL on the retry — a stale signed URL self-heals.
+        if (!state._restoring) MusicEngine.reportStreamFailure(track.videoId || '', {});
+      }
+    }
+    if (!played) {
+      el.src = src;
+      setBuffering(true);
+      mediaLoadAttempted = true;
+      await el.play();
+    }
     recordPlay(track);
     preloadNextTrack(); // buffer the next song early, whatever the source
   } catch (e) {
@@ -1399,7 +1585,7 @@ function preloadNextTrack() {
   if (!next) return;
   const toEl = otherEl();
   // Already preloaded this exact track — don't reload it.
-  if (state.preloadedVid && state.preloadedVid === (next.videoId || next.id) && toEl.src) return;
+  if (state.preloadedVid && state.preloadedVid === (next.videoId || next.id) && (toEl._mse || toEl.src)) return;
   if (next.videoId) MusicEngine.warm(next.videoId); // cache the URL even if the load below is slow
   // Fire-and-forget warm the track after next too, so skipping forward twice
   // (or the track after the crossfade) is just as instant.
@@ -1423,11 +1609,19 @@ function preloadNextTrack() {
     if (state.queue !== queue || state.index !== index || state.playingId !== state.currentTrack?.id) return;
     if (state.preloadedVid === (track.videoId || track.id) && toEl.src) return;
     try {
-      toEl.src = src;
+      if (state.preloadedVid === (track.videoId || track.id) && toEl._mse) return;
+      mseTeardown(toEl);
+      if ((track.duration || 0) > 0) {
+        // MSE preload: buffer the first chunk (paused, silent) — the crossfade
+        // then just fades the volumes, no URL resolution at handoff time.
+        await mseStart(toEl, track, src, { play: false, seekTo: 0 });
+      } else {
+        toEl.src = src;
+        toEl.load();
+      }
       toEl.volume = 0; // silent until the fade begins
-      toEl.load();     // buffer in the background, stays paused
       state.preloadedVid = track.videoId || track.id;
-    } catch { /* ignore */ }
+    } catch { mseTeardown(toEl); }
   })();
 }
 
@@ -1544,19 +1738,24 @@ function maybeStartCrossfade() {
     if (!track.videoId && track.searchQuery) {
       try { track = await MusicEngine.resolveChartTrack(track); state.queue[toIdx] = track; } catch { state.xfade = null; return; }
     }
+    const preloaded = state.preloadedVid === (track.videoId || track.id) && toEl._mse && !toEl._mse.dead;
     let src = '';
     // Fast path: the partner element already buffered this exact track during
     // preloadNextTrack() — skip URL resolution entirely, just fade it in.
-    if (state.preloadedVid && state.preloadedVid === (track.videoId || track.id) && toEl.src) {
-      src = toEl.src;
-    } else if (track.source === 'youtube' && track.videoId) {
-      try { src = (await MusicEngine.streamUrl(track.videoId)).url; } catch { state.xfade = null; return; }
-    } else if (track.audioUrl) {
-      src = track.audioUrl;
-    } else { state.xfade = null; return; }
+    if (!preloaded) {
+      if (track.source === 'youtube' && track.videoId) {
+        try { src = (await MusicEngine.streamUrl(track.videoId)).url; } catch { state.xfade = null; return; }
+      } else if (track.audioUrl) {
+        src = track.audioUrl;
+      } else { state.xfade = null; return; }
+    }
     if (!state.xfade || curEl() !== fromEl || state.playingId !== state.currentTrack?.id) { state.xfade = null; return; }
     try {
-      if (toEl.src !== src) toEl.src = src;
+      if (!preloaded) {
+        mseTeardown(toEl);
+        if ((track.duration || 0) > 0) await mseStart(toEl, track, src, { play: false, seekTo: 0 });
+        else toEl.src = src;
+      }
       toEl.volume = 0;
       await toEl.play();
     } catch { state.xfade = null; return; }
@@ -1596,7 +1795,7 @@ function finalizeCrossfade() {
   recordPlay(next);
   preloadNextTrack();
   // Free the old element for the next handoff.
-  try { xf.fromEl.pause(); xf.fromEl.src = ''; xf.fromEl.volume = state.userVol; } catch { /* ignore */ }
+  try { xf.fromEl.pause(); mseTeardown(xf.fromEl); xf.fromEl.volume = state.userVol; } catch { /* ignore */ }
 }
 
 // Last-resort playback: some WebViews block the <audio> element from loading
@@ -1634,6 +1833,7 @@ async function playRelayViaFetch(track) {
       if (state._prevBlobUrl) URL.revokeObjectURL(state._prevBlobUrl);
       state._prevBlobUrl = blobUrl;
       const el = curEl();
+      mseTeardown(el);
       el.src = blobUrl;
       setBuffering(true);
       await el.play();
@@ -1745,8 +1945,7 @@ window.__np = {
     else if (cmd === 'prev') prevTrack();
   },
   seekTo(sec) {
-    const el = curEl();
-    if (el.duration && Number.isFinite(sec)) el.currentTime = Math.max(0, Math.min(sec, el.duration));
+    if (Number.isFinite(sec)) seekPlayerTo(sec); // MSE-aware (re-chunks outside the buffer)
   },
 };
 
@@ -1850,9 +2049,28 @@ on('#btn-play', 'click', () => {
 on('#btn-next', 'click', nextTrack);
 on('#btn-prev', 'click', prevTrack);
 
-on('#seek', 'change', () => {
+// Seek with MSE awareness: inside the buffered window it's a plain jump;
+// outside it, clear the buffer and re-chunk from the new position.
+function seekPlayerTo(sec) {
   const el = curEl();
-  if (el.duration) el.currentTime = (Number($('#seek').value) / 1000) * el.duration;
+  if (!el.duration) return;
+  const target = Math.min(el.duration, Math.max(0, sec));
+  if (el._mse) {
+    let inside = false;
+    try { for (let i = 0; i < el.buffered.length; i++) if (target >= el.buffered.start(i) && target < el.buffered.end(i)) inside = true; } catch { /* ignore */ }
+    if (inside) { el.currentTime = target; return; }
+    const s = el._mse;
+    const track = s.track, url = s.url;
+    const wasPaused = el.paused;
+    mseTeardown(el);
+    mseStart(el, track, url, { play: !wasPaused, seekTo: target }).catch(() => {});
+    return;
+  }
+  el.currentTime = target;
+}
+
+on('#seek', 'change', () => {
+  if (curEl().duration) seekPlayerTo((Number($('#seek').value) / 1000) * curEl().duration);
 });
 on('#volume', 'input', () => {
   state.userVol = Number($('#volume').value) / 100;
@@ -1913,8 +2131,7 @@ on('#np-seek', 'input', () => {
   $('#seek').value = $('#np-seek').value;
 });
 on('#np-seek', 'change', () => {
-  const el = curEl();
-  if (el.duration) el.currentTime = (Number($('#np-seek').value) / 1000) * el.duration;
+  if (curEl().duration) seekPlayerTo((Number($('#np-seek').value) / 1000) * curEl().duration);
 });
 
 on('#np-volume', 'input', () => {
@@ -2357,7 +2574,11 @@ function restorePlayer(s) {
         else if (track.audioUrl) src = track.audioUrl;
         else return;
         if (state.currentTrack !== track) return;
-        curEl().src = src;
+        const el = curEl();
+        if ((track.duration || 0) > 0) {
+          try { await mseStart(el, track, src, { play: false, seekTo: s.currentTime || 0 }); return; } catch { mseTeardown(el); }
+        }
+        el.src = src;
       } catch { /* leave the player bar visible, no source */ }
     };
     tryRestore();
