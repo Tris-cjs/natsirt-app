@@ -6,7 +6,7 @@ Private Android application project. Keep this repo's description neutral.
 
 | File | Purpose |
 |---|---|
-| `Natsirt-v68.apk` | Release build |
+| `Natsirt-v69.apk` | Release build |
 | `index.html` | Minimal site page |
 | `update.json` + `engine.js` `brain.js` `app.js` `style.css` | Self-update bundle (installed apps replace their web assets from this) |
 

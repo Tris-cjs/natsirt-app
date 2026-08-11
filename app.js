@@ -1341,6 +1341,14 @@ async function mseFetchChunk(s, startByte) {
   const to = Math.min(s.total - 1, Math.floor(from + chunkBytes));
   const res = await fetch(s.url, { credentials: 'omit', headers: { Range: `bytes=${from}-${to}` } });
   if (res.status === 416) { s.loadedEnd = s.total; mseMaybeEnd(s); return; }
+  if (res.status === 200) {
+    // A 200 (not 206) answer to a byte-range request means the relay fell back
+    // to its whole-file muxed stream — the audio-only URL is CDN-capped past
+    // ~1MB. Abort without downloading the whole muxed file; the refill catch
+    // hands off to the plain <audio> element, which plays it directly.
+    try { if (res.body && res.body.cancel) res.body.cancel(); } catch { /* ignore */ }
+    throw new Error('Muxed whole-file fallback');
+  }
   if (!res.ok) throw new Error(`range HTTP ${res.status}`);
   const buf = await res.arrayBuffer();
   if (s.dead || !s.sb) return;
