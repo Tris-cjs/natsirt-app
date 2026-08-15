@@ -276,19 +276,32 @@ window.MusicEngine = (() => {
   // bot-blocked on flagged datacenter egress IPs, and a blocked stream trips
   // reportStreamFailure → short backoff → the Piped fallback, so it never
   // hard-stalls a track.
+  // Order a candidate list best-first for STREAMING: the Brain's learned
+  // health (most-recently-good first) beats blind round-robin, so a relay
+  // that kept streaming (e.g. the PC tunnel, residential IP) is always tried
+  // before a flaky one (e.g. a datacenter Worker whose /stream is
+  // intermittently bot-blocked). Falls back to round-robin without the Brain.
+  function streamOrder(cands) {
+    if (window.Brain && Brain.suggestSourceOrder) return Brain.suggestSourceOrder(cands);
+    if (!cands.length) return cands;
+    const start = (rrIdx = (rrIdx + 1) % cands.length);
+    return cands.slice(start).concat(cands.slice(0, start));
+  }
+
   function preferredRelay() {
     const healthy = RELAYS.filter(relayHealthy);
     if (!healthy.length) return RELAYS[0] || '';
     // On-device relay first: self-contained, works with the PC off.
     const local = healthy.find((u) => /127\.0\.0\.1|localhost/.test(u));
     if (local) return local;
-    // Then the PC relays (LAN or Tailscale).
+    // Then the PC relays (LAN or Tailscale) — residential IPs, so they stream
+    // reliably; prefer the one that's been streaming best.
     const lan = healthy.filter((u) => /^http:\/\//.test(u) && !/127\.0\.0\.1|localhost/.test(u));
-    if (lan.length) return lan[(rrIdx = (rrIdx + 1) % lan.length)];
+    if (lan.length) return streamOrder(lan)[0];
     // Browser/PWA: no loopback or LAN relay exists — use any remaining
-    // healthy relay (the Cloudflare Worker, once configured).
+    // healthy relay (the tunnel / Worker), best-known first.
     const rest = healthy.filter((u) => !/127\.0\.0\.1|localhost/.test(u));
-    if (rest.length) return rest[(rrIdx = (rrIdx + 1) % rest.length)];
+    if (rest.length) return streamOrder(rest)[0];
     return RELAYS[0] || '';
   }
 
@@ -651,9 +664,12 @@ window.MusicEngine = (() => {
   // resilience: 141 = 256kbps AAC, 251 = 160kbps opus, 140 = 128kbps AAC
   // (great quality at HALF the size of 141), 139/249 = ~48kbps opus
   // (smallest — plays smoothly on the weakest connections).
-  const ITAG_HIGH = [141, 251, 140, 250, 249, 599, 600, 139];
-  const ITAG_STANDARD = [140, 251, 141, 250, 249, 599, 600, 139];
-  const ITAG_LOW = [139, 249, 250, 599, 600, 140, 251, 141];
+  // AAC/MP4 (141/140/139) is preferred over Opus/WebM (251/250/249) at every
+  // tier: iOS Safari's MSE and <audio> cannot decode WebM/Opus, so a webm
+  // pick fails iPhone playback. Opus stays as a last-resort fallback.
+  const ITAG_HIGH = [141, 140, 251, 250, 249, 599, 600, 139];
+  const ITAG_STANDARD = [140, 141, 251, 250, 249, 599, 600, 139];
+  const ITAG_LOW = [139, 249, 250, 140, 251, 141, 599, 600];
   const QUALITY_ITAGS = { high: ITAG_HIGH, standard: ITAG_STANDARD, low: ITAG_LOW };
   const QUALITY_KEY = 'natsirt_stream_quality';
   const QUALITY_OPTIONS = ['auto', 'high', 'standard', 'low'];

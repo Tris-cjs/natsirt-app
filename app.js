@@ -3760,11 +3760,19 @@ async function playTrackAt(i, list) {
         played = true;
       } catch (e) {
         mseTeardown(el);
+        const errMsg = String((e && e.message) || '');
         // CDN-capped audio-only URL: MSE can't finish it (the cap ends the
         // file early). The plain <audio> fallback below must use the relay's
         // full-length MUXED stream — the capped audio-only URL would only
         // replay the capped fragment and stop again.
-        if (String((e && e.message) || '').includes('Muxed')) src = muxedStreamUrl(src);
+        if (errMsg.includes('Muxed')) src = muxedStreamUrl(src);
+        // 'Unsupported stream type' = the relay answered WebM/Opus and this
+        // platform's MSE can't decode it (iOS Safari: MSE supports fragmented
+        // MP4/AAC only). Re-point the plain <audio> fallback at the relay's
+        // muxed MP4 stream — its AAC audio track decodes on iOS. This is the
+        // safety net when a relay still hands out a webm answer (e.g. a track
+        // whose only audio format is Opus).
+        if (errMsg.includes('Unsupported stream type')) src = muxedStreamUrl(src);
         // Fresh URL on the retry — a stale signed URL self-heals.
         if (!state._restoring) MusicEngine.reportStreamFailure(track.videoId || '', {});
       }
