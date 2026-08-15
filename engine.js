@@ -39,7 +39,7 @@ window.MusicEngine = (() => {
   // (dash.cloudflare.com → Workers & Pages → Create Worker → paste → Save
   // and deploy), then paste the https://<name>.workers.dev URL here and
   // rebuild. A placeholder (contains __YOUR_) is treated as unset.
-  const RELAY_WORKER = 'https://__YOUR_WORKER__.workers.dev';
+  const RELAY_WORKER = 'https://orbeat-relay.tristancajes.workers.dev';
   const workerConfigured = () => !RELAY_WORKER.includes('__YOUR_');
 
   // PC-resident relay exposed over HTTPS via Cloudflare Tunnel
