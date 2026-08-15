@@ -1,54 +1,91 @@
-/* Natsirt — black & green, modern music player */
+/* OrBeat — Spotify mobile UI, copied 1:1 in spirit.
+   Base #121212 · premium black nav · #FF6A00 accent · #b3b3b3 dim text ·
+   top-fade gradient home · white pill search · full-page Library ·
+   full-screen Now Playing with art-gradient backdrop. */
 
-/* Spotify's UI font (Inter — bundled locally so the app works offline).
-   Montserrat stays for the brand wordmark/hero (Netflix-style). */
+@font-face {
+  font-family: 'Spotify Mix';
+  src: url('./fonts/SpotifyMix-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Spotify Mix';
+  src: url('./fonts/SpotifyMix-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Spotify Mix';
+  src: url('./fonts/SpotifyMix-Extrabold.woff2') format('woff2');
+  font-weight: 800;
+  font-display: swap;
+}
+
 @font-face {
   font-family: 'Inter';
-  src: url('/fonts/Inter-Variable.woff2') format('woff2');
+  src: url('./fonts/Inter-Variable.woff2') format('woff2');
   font-weight: 100 900;
   font-display: swap;
 }
 
 @font-face {
   font-family: 'Montserrat';
-  src: url('/fonts/Montserrat-Variable.woff2') format('woff2');
+  src: url('./fonts/Montserrat-Variable.woff2') format('woff2');
   font-weight: 100 900;
   font-display: swap;
 }
 
-/* NATSIRT wordmark — a Netflix Sans-style geometric sans (Sora) so the
-   brand stands apart from the Montserrat (Spotify-like) UI type. */
 @font-face {
   font-family: 'Sora';
-  src: url('/fonts/Sora-Variable.woff2') format('woff2');
+  src: url('./fonts/Sora-Variable.woff2') format('woff2');
   font-weight: 100 900;
   font-display: swap;
 }
 
 :root {
-  --bg: #070908;
-  --bg-elev: #0d100f;
-  --bg-card: #111513;
-  --bg-hover: #171c19;
-  --line: #1e2421;
-  --text: #e8f0ea;
-  --text-dim: #8a948d;
-  --accent: #00e676;
-  --accent-strong: #00f27a;
-  --accent-dim: rgba(0, 230, 118, 0.14);
-  --accent-glow: rgba(0, 230, 118, 0.35);
-  --danger: #ff4d5e;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --player-h: 100px;
-  --nav-h: 62px;
-  --topbar-h: 63px;
-  --font: 'Montserrat', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  /* Black + orange palette */
+  --bg: #121212;
+  --bg-elev: #181818;
+  --bg-card: #242424;
+  --bg-hover: #282828;
+  --bg-press: #3e3e3e;
+  --line: rgba(255, 255, 255, 0.09);
+  --text: #ffffff;
+  --text-dim: #b3b3b3;
+  --text-dimmer: #7a7a7a;
+  --accent: #ff6a00;
+  --accent-strong: #ff9e00;
+  --accent-dim: rgba(255, 106, 0, 0.16);
+  --danger: #f15e6c;
+  --home-fade: #3a2310;        /* deep burnt-orange home header */
+  --radius: 8px;
+  --nav-h: 58px;
+  --player-h: 64px;
+
+  /* Fluid type scale — clamp() ties each size to the viewport width, so
+     text shrinks on ultra-narrow phones (never clips or overflows) and
+     grows on large / high-density screens. Sizes at 360px match the old
+     fixed values exactly; the rest scale smoothly. */
+  --fs-hero: clamp(24px, 7.8vw, 32px);      /* search / genre / queue titles */
+  --fs-greeting: clamp(26px, 8.2vw, 36px);  /* home greeting, library title */
+  --fs-xl: clamp(19px, 6.1vw, 25px);        /* album page name */
+  --fs-lg: clamp(18px, 5.8vw, 24px);        /* now playing title */
+  --fs-md: clamp(16px, 5.3vw, 22px);        /* section headers */
+  --fs-chip: clamp(15px, 5vw, 21px);        /* mood chip name */
+  --fs-body: clamp(13px, 4.2vw, 17px);      /* search rows, np artist */
+  --fs-name: clamp(12px, 3.9vw, 15.5px);    /* track / queue / mini titles */
+  --fs-card: clamp(11.5px, 3.6vw, 14.5px);  /* card / shelf titles */
+  --fs-sub: clamp(10.5px, 3.3vw, 13px);     /* artists, sub-labels */
+  --fs-sub-sm: clamp(10px, 3.1vw, 12.5px);  /* small card artists */
+  --font: 'Spotify Mix', 'Inter', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* The `hidden` attribute must always win over display:flex/grid set below. */
+/* The `hidden` attribute must always win over display rules. */
 [hidden] { display: none !important; }
 
 html, body { height: 100%; }
@@ -59,6 +96,157 @@ body {
   font-family: var(--font);
   font-size: 14px;
   overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  /* Stop Android WebView from auto-inflating text on high-density screens
+     (that is what silently pushes titles past their containers). */
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ===== Boot splash: the OrBeat hero intro ===== */
+.boot-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  /* A soft orange glow breathing from the top behind the emblem. */
+  background:
+    radial-gradient(120% 60% at 50% 10%, rgba(255, 106, 0, 0.14), transparent 62%),
+    var(--bg);
+  display: grid;
+  place-items: center;
+  transition: opacity 0.5s ease 0.1s;
+}
+
+.boot-splash.done {
+  opacity: 0;
+  pointer-events: none;
+}
+/* Premium exit: the hero lifts, blurs and dissolves away to reveal Home. */
+.boot-splash.done .hero {
+  animation: hero-exit 0.55s cubic-bezier(0.5, 0, 0.75, 0.4) forwards;
+}
+@keyframes hero-exit {
+  to { opacity: 0; transform: scale(1.07); filter: blur(8px); }
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* Emblem: the logo pops in while an orbiting ring (a beat circling the
+   mark — the "orbit" in OrBeat) fades in and spins around it. */
+.hero-emblem {
+  position: relative;
+  width: 124px;
+  height: 124px;
+  display: grid;
+  place-items: center;
+}
+.hero-orbit {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 158, 0, 0.28);
+  opacity: 0;
+  animation: orbit-spin 5s linear infinite;
+}
+.hero-orbit::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff9e00, #ff6a00);
+  box-shadow: 0 0 12px rgba(255, 106, 0, 0.9);
+}
+@keyframes orbit-spin {
+  0%   { transform: rotate(0deg);   opacity: 0; }
+  8%   { opacity: 1; }
+  100% { transform: rotate(360deg); opacity: 1; }
+}
+
+.boot-logo {
+  width: 104px;
+  height: 104px;
+  border-radius: 26px;
+  object-fit: contain;
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 34px rgba(255, 106, 0, 0.28);
+  animation: boot-pop 0.9s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+}
+@keyframes boot-pop {
+  0%   { transform: scale(0.3) rotate(-30deg); opacity: 0; }
+  55%  { transform: scale(1.08) rotate(6deg);  opacity: 1; }
+  80%  { transform: scale(0.96) rotate(-2deg); }
+  100% { transform: scale(1) rotate(0deg);     opacity: 1; }
+}
+
+/* OrBeat: gradient word (orange melting into white) rising letter by
+   letter. */
+.hero-name {
+  margin-top: 26px;
+  font-size: 46px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  display: flex;
+  gap: 2px;
+  background: linear-gradient(92deg, #ff9e00 0%, #ff6a00 38%, #ffffff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+.hn {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(22px);
+  animation: hero-letter 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.hn:nth-child(1) { animation-delay: 0.62s; }
+.hn:nth-child(2) { animation-delay: 0.69s; }
+.hn:nth-child(3) { animation-delay: 0.76s; }
+.hn:nth-child(4) { animation-delay: 0.83s; }
+.hn:nth-child(5) { animation-delay: 0.90s; }
+.hn:nth-child(6) { animation-delay: 0.97s; }
+@keyframes hero-letter {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Thin orange divider growing out from the center between name and quote. */
+.hero-line {
+  width: 54px;
+  height: 3px;
+  margin-top: 20px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, transparent, #ff6a00, #ff9e00, transparent);
+  transform: scaleX(0);
+  opacity: 0;
+  animation: hero-line-grow 0.6s cubic-bezier(0.22, 1, 0.36, 1) 1.3s forwards;
+}
+@keyframes hero-line-grow {
+  to { transform: scaleX(1); opacity: 1; }
+}
+
+/* Rotating tagline: fades up under the name after the letters land. */
+.hero-quote {
+  margin-top: 18px;
+  font-size: 14px;
+  letter-spacing: 0.4px;
+  color: rgba(255, 255, 255, 0.62);
+  opacity: 0;
+  animation: hero-quote-in 0.7s ease 1.5s forwards;
+}
+@keyframes hero-quote-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 button {
@@ -67,1736 +255,1965 @@ button {
   background: none;
   border: none;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* ---------- top bar ---------- */
+input { font-family: inherit; }
 
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  padding: 14px 22px;
-  border-bottom: 1px solid var(--line);
-  background: rgba(7, 9, 8, 0.92);
-  backdrop-filter: blur(10px);
-  position: relative;
-  z-index: 10;
-}
+img { display: block; }
 
-.brand { display: flex; align-items: center; gap: 10px; user-select: none; }
+::-webkit-scrollbar { width: 0; height: 0; }
 
-.logo {
-  width: 34px;
-  height: 34px;
-  object-fit: cover;
-  border-radius: 9px;
-  box-shadow: 0 0 12px var(--accent-glow);
-  background: #000;
-}
-
-.wordmark {
-  /* Netflix Sans-style wordmark on the right — Sora, tight caps. */
-  font-family: 'Sora', 'Montserrat', 'Segoe UI', system-ui, sans-serif;
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  line-height: 1;
-  background: linear-gradient(90deg, var(--accent-strong), #00b34d);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.topbar-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-/* ---------- bottom nav (Home / Moods icons + search bar) ---------- */
-
-.bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: calc(var(--nav-h) + env(safe-area-inset-bottom));
-  padding: 5px 12px calc(5px + env(safe-area-inset-bottom));
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(10, 13, 11, 0.96);
-  border-top: 1px solid var(--line);
-  backdrop-filter: blur(14px);
-  z-index: 30;
-}
-
-.nav-tab {
-  flex: 0 0 auto;
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  color: var(--text-dim);
-  transition: all 0.15s ease;
-}
-
-.nav-tab:hover { color: var(--text); background: var(--bg-hover); }
-
-.nav-tab.active {
-  color: var(--accent-strong);
-  background: var(--accent-dim);
-  box-shadow: inset 0 0 0 1px var(--accent-dim);
-}
-
-.nav-tab:active { transform: scale(0.92); }
-
-.nav-search {
-  flex: 1;
-  min-width: 0;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--bg-elev);
-  color: var(--text-dim);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.nav-search:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-dim);
-  color: var(--accent);
-}
-
-.nav-search input {
-  flex: 1;
-  min-width: 0;
-  -webkit-appearance: none;
-  appearance: none;
-  background: none;
-  border: none;
-  outline: none;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 14px;
-}
-
-.nav-search input::placeholder { color: var(--text-dim); }
-.nav-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
-
-.search-clear {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-dim);
-  cursor: pointer;
-}
-.search-clear:active { background: rgba(255, 255, 255, 0.16); color: var(--text); }
-
-.icon-btn {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  color: var(--text-dim);
-  transition: all 0.15s ease;
-}
-
-.icon-btn:hover { color: var(--accent); background: var(--bg-hover); }
-
-.badge {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  min-width: 17px;
-  height: 17px;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: #04150b;
-  font-size: 10.5px;
-  font-weight: 800;
-  display: grid;
-  place-items: center;
-}
-
-/* ---------- buttons ---------- */
-
-.btn {
-  padding: 10px 20px;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 700;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-
-.btn.primary {
-  background: linear-gradient(90deg, var(--accent-strong), #00c95c);
-  color: #04150b;
-  box-shadow: 0 2px 14px var(--accent-glow);
-}
-
-.btn.primary:hover { filter: brightness(1.08); }
-
-.btn.ghost {
-  background: transparent;
-  border: 1px solid var(--line);
-  color: var(--text-dim);
-}
-
-.btn.ghost:hover { color: var(--accent); border-color: var(--accent); }
-
-.btn.sm { padding: 7px 14px; font-size: 12.5px; }
-
-/* ---------- content + grid ---------- */
+/* ============================== scroll container ============================== */
 
 .content {
-  height: calc(100vh - var(--player-h) - 61px);
-  overflow-y: auto;
-  padding: 20px 22px 30px;
-}
-
-/* ---------- genre chips (home) ---------- */
-
-.genre-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 2px 2px 8px;
-  overflow-x: auto;
-}
-
-.genre-row .chips { flex-wrap: nowrap; }
-
-.chip.genre-chip.active {
-  color: #04150b;
-  background: linear-gradient(90deg, var(--accent-strong), #00c95c);
-  border-color: transparent;
-  font-weight: 800;
-}
-
-/* genre page (fullscreen overlay) */
-
-.genre-view { overflow-y: auto; padding: 18px 22px 30px; }
-
-.genre-head {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-
-.genre-banner {
-  flex-shrink: 0;
-  width: 72px;
-  height: 72px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #f72585, #b5179e);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-}
-
-/* ---------- genres list (home, Spotify-style tiles) ---------- */
-
-.genres-list { margin: 6px 0 2px; content-visibility: auto; contain-intrinsic-size: auto 120px; }
-
-.genres-row {
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  padding: 2px 2px 14px;
-  scroll-snap-type: x proximity;
-}
-
-.genre-tile {
   position: relative;
-  overflow: hidden;
-  flex: 0 0 auto;
-  min-width: 136px;
-  height: 86px;
-  border-radius: 14px;
-  display: flex;
-  align-items: flex-end;
-  padding: 12px 14px;
-  scroll-snap-align: start;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-/* Spotify-style decorative circle peeking from the corner. */
-.genre-tile::after {
-  content: '';
-  position: absolute;
-  right: -20px;
-  bottom: -22px;
-  width: 74px;
-  height: 74px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.18);
-  pointer-events: none;
-}
-
-.genre-tile:active {
-  transform: scale(0.97);
-}
-
-.genre-tile-name {
-  position: relative;
-  z-index: 1;
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: -0.2px;
-  color: #fff;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ---------- artists list (home) ---------- */
-
-.artists { margin-bottom: 6px; content-visibility: auto; contain-intrinsic-size: auto 90px; }
-
-.artists-row {
-  display: flex;
-  gap: 16px;
-  overflow-x: auto;
-  padding: 2px 2px 14px;
-  scroll-snap-type: x proximity;
-}
-
-.artist-item {
-  flex: 0 0 auto;
-  width: 96px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  scroll-snap-align: start;
-  transition: transform 0.15s ease;
-}
-
-.artist-item:active { transform: scale(0.97); }
-
-.artist-ava {
-  width: 96px;
-  height: 96px;
-  border-radius: 50%;
-  overflow: hidden;
-  background: #0a0d0b;
-  box-shadow: 0 0 0 1px var(--line), 0 8px 22px rgba(0, 0, 0, 0.45);
-}
-
-.artist-img {
-  width: 100%;
   height: 100%;
-  object-fit: cover;
-  display: block;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg);
+  padding-bottom: calc(var(--player-h) + var(--nav-h) + env(safe-area-inset-bottom) + 24px);
+  scrollbar-width: none;
 }
 
-.artist-img.noimg {
-  display: grid;
-  place-items: center;
-  font-size: 30px;
-  color: #2c322e;
-  background: radial-gradient(circle at 30% 25%, #101612, #0a0d0b 70%);
+.tab-page {
+  min-height: 100%;
+  padding-bottom: 16px;
 }
 
-.artist-name {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text);
-  max-width: 96px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: center;
-}
+/* ============================== HOME: top fade ============================== */
 
-/* ---------- moods page (Moods tab) ---------- */
+#home-view { position: relative; padding-top: calc(env(safe-area-inset-top) + 18px); }
 
-.moods-page { padding: 4px 0; }
-
-.mood-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.mood-chip {
-  position: relative;
-  overflow: hidden;
-  padding: 18px 16px;
-  border-radius: 16px;
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 88px;
-  transition: transform 0.12s ease;
-  border: 1px solid transparent;
-}
-
-.mood-chip:active {
-  transform: scale(0.96);
-  border-color: rgba(255,255,255,0.15);
-}
-
-.mood-chip::after {
-  content: '';
+/* Spotify's signature orange header — melts into the base as you scroll. */
+.page-fade {
   position: absolute;
-  right: -18px;
-  bottom: -18px;
-  width: 70px;
-  height: 70px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.1);
+  top: 0; left: 0; right: 0;
+  height: 340px;
+  background: linear-gradient(180deg, var(--home-fade) 0%, rgba(18, 18, 18, 0) 100%);
   pointer-events: none;
 }
 
-.mood-chip-name {
-  font-size: 16px;
+.home-head { padding: 2px 16px 0; position: relative; }
+
+.home-greeting {
+  font-size: var(--fs-greeting);
   font-weight: 800;
-  letter-spacing: -0.2px;
-  color: #fff;
-  text-shadow: 0 2px 6px rgba(0,0,0,0.4);
-  position: relative;
-  z-index: 1;
+  letter-spacing: -0.4px;
+  line-height: 1.15;
 }
 
-.mood-chip-sub {
-  font-size: 11px;
-  color: rgba(255,255,255,0.65);
-  position: relative;
-  z-index: 1;
-}
-
-.mood-chip.active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), 0 0 20px var(--accent-glow);
-}
-
-.mood-results { margin-top: 18px; }
-.mood-results .section-title { margin-bottom: 4px; }
-
-@media (max-width: 480px) {
-  .mood-grid { gap: 10px; }
-  .mood-chip { min-height: 76px; padding: 14px; }
-}
-
-.row-loading {
-  color: var(--text-dim);
-  font-size: 13px;
-  padding: 18px 4px;
-}
-
-/* ---------- section titles + For You row ---------- */
-
-.section-title {
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: -0.2px;
-  margin: 2px 0 2px;
-}
-
-.section-sub {
-  color: var(--text-dim);
-  font-size: 12.5px;
-  margin-bottom: 14px;
-}
-
-.trending-sec { margin-top: 18px; }
-
-.albums-sec { margin-top: 18px; }
-
-/* Album view (fullscreen overlay using the same backdop as now-playing) */
-.album-view {
-  overflow: hidden;
+/* Sticky filter chips — Spotify's green-pill filter row. */
+.home-chips {
+  position: sticky;
+  top: env(safe-area-inset-top);
+  z-index: 20;
   display: flex;
-  flex-direction: column;
-  padding: 0;
-  gap: 0;
-}
-
-.album-head {
-  display: flex;
-  gap: 20px;
-  padding: 48px 26px 18px;
-  align-items: flex-end;
-  background: linear-gradient(180deg, rgba(0, 230, 118, 0.15), transparent 60%);
-  flex-shrink: 0;
-  /* Never push the cover off-screen — the meta column wraps its title. */
-  min-width: 0;
-  flex-wrap: nowrap;
-}
-
-.album-art {
-  width: 130px;
-  height: 130px;
-  border-radius: 14px;
-  overflow: hidden;
-  flex: 0 0 130px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5), 0 0 20px var(--accent-glow);
-  background: #0a0d0b;
-}
-
-.album-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.album-art .noimg { width: 100%; height: 100%; display: grid; place-items: center; font-size: 40px; color: #2c322e; }
-
-.album-meta { min-width: 0; flex: 1; }
-
-.album-name {
-  font-size: 20px;
-  font-weight: 800;
-  line-height: 1.28;
-  margin: 8px 0 4px;
-  /* The whole title must be readable: wrap freely instead of one-line
-     ellipsis. Cap at 4 lines so a pathological 200-char title can't push
-     the header off the screen — the tracks list below still scrolls. */
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.album-artist {
-  font-size: 15px;
-  color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.album-meta2 {
-  font-size: 12px;
-  color: var(--text-dim);
-  margin-top: 4px;
-}
-
-.album-tracks {
-  overflow-y: auto;
-  flex: 1;
-  padding: 6px 14px 20px;
-}
-
-.album-track {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-.album-track:hover { background: var(--bg-hover); }
-.album-track.playing { background: var(--accent-dim); }
-.album-track.playing .t-name { color: var(--accent-strong); }
-.album-track .t-info { flex: 1; min-width: 0; }
-.album-track .t-name {
-  font-size: 14px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.album-track .t-artist {
-  font-size: 12px;
-  color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Album track cover image (small thumbnail before the title) */
-.album-track .t-cover {
-  flex: 0 0 36px;
-  width: 36px;
-  height: 36px;
-  border-radius: 6px;
-  overflow: hidden;
-}
-.album-track .t-cover-img {
-  width: 36px;
-  height: 36px;
-  object-fit: cover;
-  border-radius: 6px;
-  display: block;
-}
-.album-track .t-cover .noimg {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-hover);
-  border-radius: 6px;
-  font-size: 14px;
-}
-/* Search results list view (used in Search mode) */
-.search-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 0;
-}
-.search-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 16px;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-.search-item:hover { background: var(--bg-hover); }
-.search-item.playing { background: var(--accent-dim); }
-.search-item.playing .si-name { color: var(--accent-strong); }
-.search-item .si-cover {
-  flex: 0 0 40px;
-  width: 40px;
-  height: 40px;
-  border-radius: 6px;
-  overflow: hidden;
-}
-.search-item .si-img {
-  width: 40px;
-  height: 40px;
-  object-fit: cover;
-  border-radius: 6px;
-  display: block;
-}
-.search-item .si-img.noimg {
-  background: var(--bg-hover);
-}
-.search-item .si-num {
-  width: 20px;
-  text-align: right;
-  font-size: 11px;
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-  flex: 0 0 20px;
-}
-.search-item .si-info {
-  flex: 1;
-  min-width: 0;
-}
-.search-item .si-name {
-  font-size: 14px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.search-item .si-artist {
-  font-size: 12px;
-  color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.search-item .si-dur {
-  font-size: 11px;
-  color: var(--text-dim);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Album cards in the Home row */
-.album-card {
-  flex: 0 0 auto;
-  width: 150px;
-  display: flex;
-  flex-direction: column;
   gap: 8px;
-  scroll-snap-align: start;
-  text-align: left;
-  transition: transform 0.15s ease;
-}
-.album-card:active { transform: scale(0.97); }
-
-.album-card-cover {
-  width: 150px;
-  height: 150px;
-  border-radius: 14px;
-  overflow: hidden;
-  background: #0a0d0b;
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
-}
-.album-card-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.album-card-cover .noimg { width: 100%; height: 100%; display: grid; place-items: center; font-size: 36px; color: #2c322e; }
-
-.album-card-name {
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  max-width: 150px;
+  padding: 12px 16px 10px;
+  margin-top: 12px;
+  background: rgba(18, 18, 18, 0.66);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
-.album-card-artist {
-  font-size: 12px;
-  color: var(--text-dim);
+.chip {
+  padding: 7px 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 150px;
+  transition: background 0.15s ease, transform 0.1s ease;
 }
+
+.chip:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.2); }
+
+.chip.active {
+  background: var(--accent);
+  color: #000;
+  font-weight: 700;
+}
+
+/* ===== Home filter chips: which shelves belong to each chip =====
+   Sections that still carry the hidden attribute stay hidden either way
+   ([hidden] wins); these rules hide the ones loaded but out of filter. */
+#content[data-home-filter="trending"] #recently,
+#content[data-home-filter="trending"] #foryou,
+#content[data-home-filter="trending"] #artists,
+#content[data-home-filter="trending"] #moods-page {
+  display: none !important;
+}
+
+#content[data-home-filter="foryou"] #trending-sec,
+#content[data-home-filter="foryou"] #hot-sec,
+#content[data-home-filter="foryou"] #ph-sec,
+#content[data-home-filter="foryou"] #albums-sec,
+#content[data-home-filter="foryou"] #artists,
+#content[data-home-filter="foryou"] #moods-page {
+  display: none !important;
+}
+
+#content[data-home-filter="browse"] #recently,
+#content[data-home-filter="browse"] #foryou,
+#content[data-home-filter="browse"] #trending-sec,
+#content[data-home-filter="browse"] #hot-sec,
+#content[data-home-filter="browse"] #ph-sec,
+#content[data-home-filter="browse"] #albums-sec {
+  display: none !important;
+}
+
+/* ============================== home shelves ============================== */
+
+.home-sec { margin: 26px 0 0; position: relative; }
 
 .section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+  padding: 0 16px;
 }
 
-.section-head .section-title { margin: 2px 0 2px; }
+.section-title {
+  font-size: var(--fs-md);
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.section-sub {
+  font-size: var(--fs-sub);
+  color: var(--text-dim);
+  margin: 3px 16px 12px;
+}
 
 .hrow {
   display: flex;
   gap: 14px;
   overflow-x: auto;
-  padding: 2px 2px 14px;
+  padding: 4px 16px 8px;
   scroll-snap-type: x proximity;
+  /* Snap cards to the padded edge, not the raw scrollport — otherwise the
+     browser scrolls the 16px left padding out of view and the first card
+     sits flush against the screen edge. */
+  scroll-padding-inline: 16px;
+  scrollbar-width: none;
 }
 
-.hrow::-webkit-scrollbar { height: 8px; }
-.hrow::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
-.hrow::-webkit-scrollbar-thumb:hover { background: #2a322d; }
+.hrow > * { scroll-snap-align: start; }
 
-.card.compact { min-width: 150px; width: 150px; flex: 0 0 auto; scroll-snap-align: start; }
-
-/* ---------- genre mood rows (Home) ---------- */
-
-.moods { margin-top: 18px; }
-
-.mood-sec { margin-bottom: 22px; }
-
-.mood-head {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 10px;
-}
-
-.mood-banner {
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
-  flex: 0 0 auto;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
-}
-
-/* ---------- search history chips (floating panel, typing only) ---------- */
-
-.history-row {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: calc(var(--nav-h) + 12px);
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  /* Glassy frosted panel — translucent blur, not flat black. */
-  background: rgba(20, 26, 22, 0.5);
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
-  backdrop-filter: blur(22px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 16px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  max-height: min(40vh, 320px);
-  overflow-y: auto;
-  animation: history-pop 0.16s ease;
-}
-
-.history-row .sugg { border-radius: 10px; }
-.history-row .sugg:hover, .history-row .sugg:active { background: rgba(255, 255, 255, 0.1); }
-
-body:has(#player:not([hidden])) .history-row {
-  bottom: calc(var(--nav-h) + var(--player-h) + 12px);
-}
-
-@keyframes history-pop {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.history-label {
-  font-size: 10.5px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+.row-loading {
+  padding: 14px 16px;
   color: var(--text-dim);
-  white-space: nowrap;
+  font-size: 13px;
 }
 
-.chips {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  flex: 1;
-  min-width: 0;
-}
+/* ----- Recently played — Spotify "Good morning" 2-column quick grid ----- */
 
-/* song suggestion rows (search dropdown) */
-
-.sugg {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 6px;
-  border: none;
-  border-radius: 10px;
-  background: none;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-}
-.sugg:hover, .sugg:active { background: rgba(255, 255, 255, 0.06); }
-
-.sugg-cover {
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--bg-elev);
-}
-.sugg-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.sugg-cover .noimg { width: 100%; height: 100%; display: grid; place-items: center; }
-
-.sugg-meta {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.sugg-name {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 600;
-  font-size: 13.5px;
-}
-.sugg-artist {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-
-/* search-mode playlist shelf */
-
-.playlists-shelf {
-  flex-direction: column;
-  gap: 10px;
-  margin: 0 0 14px;
-}
-.playlists-shelf .hrow { display: flex; }
-.playlists-shelf .section-head { margin: 0; }
-
-/* pull-to-refresh indicator */
-
-.ptr {
-  position: fixed;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 60;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-radius: 999px;
-  background: var(--bg-elev);
-  border: 1px solid var(--line);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  font-size: 12.5px;
-  color: var(--text-dim);
-}
-.ptr-spinner {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 2px solid var(--line);
-  border-top-color: var(--accent);
-  animation: spin 0.7s linear infinite;
-}
-
-.chip {
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--bg-elev);
-  color: var(--text-dim);
-  font-size: 12.5px;
-  font-weight: 600;
-  transition: all 0.15s ease;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chip:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--accent-dim);
-}
-
-/* ---------- now-playing indicator ---------- */
-
-.eq {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  display: flex;
-  align-items: flex-end;
-  gap: 2.5px;
-  height: 15px;
-  padding: 4px 6px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.62);
-  border: 1px solid var(--accent-dim);
-  box-shadow: 0 0 10px var(--accent-glow);
-}
-
-.eq span {
-  width: 3px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--accent-strong);
-  animation: eq-bounce 0.9s ease-in-out infinite;
-}
-
-.eq span:nth-child(2) { animation-delay: 0.18s; }
-.eq span:nth-child(3) { animation-delay: 0.36s; }
-
-@keyframes eq-bounce {
-  0%, 100% { height: 4px; }
-  50% { height: 11px; }
-}
-
-.card.playing .card-title { color: var(--accent-strong); }
-.card.playing .card-cover-wrap { box-shadow: inset 0 0 0 1px var(--accent); }
-
-.lib-item { position: relative; }
-.lib-item .eq {
-  position: absolute;
-  top: 10px;
-  left: 38px;
-  height: 13px;
-  padding: 3px 5px;
-}
-.lib-item.playing .t { color: var(--accent-strong); }
-
-.content::-webkit-scrollbar { width: 10px; }
-.content::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
-.content::-webkit-scrollbar-thumb:hover { background: #2a322d; }
-
-.grid {
+.quick-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 16px;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 0 16px;
 }
 
-/* Genre page: always 2 columns, compact cards */
-#genre-grid {
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-#genre-grid .card { min-width: 0; }
-#genre-grid .card-cover-wrap { aspect-ratio: 1 / 1; }
-@media (max-width: 400px) {
-  #genre-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-}
+/* ----- track cards ----- */
 
 .card {
-  background: var(--bg-card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
+  width: 145px;
+  flex: 0 0 145px;
   cursor: pointer;
-  touch-action: manipulation;
-  display: flex;
-  flex-direction: column;
+  animation: card-in 0.3s ease both;
 }
 
-.card:active { border-color: var(--accent-dim); }
+.card.compact { width: 155px; flex: 0 0 155px; }
 
-.card.playing {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), 0 0 24px var(--accent-glow);
-}
-
-.card-cover-wrap { position: relative; aspect-ratio: 1; background: #0a0d0b; }
+.card-cover-wrap { position: relative; border-radius: 6px; overflow: hidden; }
 
 .card-cover {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
   display: block;
-  background: #0a0d0b;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: var(--bg-hover);
 }
 
 .card-cover.noimg {
   display: grid;
   place-items: center;
-  color: #2c322e;
-  font-size: 42px;
-  background:
-    radial-gradient(circle at 30% 25%, #101612, #0a0d0b 70%);
-}
-
-.play-overlay {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(0, 0, 0, 0.45);
-  opacity: 0;
-}
-
-.card:active .play-overlay,
-.card.playing .play-overlay { opacity: 1; }
-
-.play-overlay .circle {
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-strong), #00c95c);
-  color: #04150b;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 4px 18px var(--accent-glow);
+  font-size: 26px;
 }
 
 .badge-license {
   position: absolute;
-  top: 8px;
-  left: 8px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  background: rgba(0, 0, 0, 0.72);
-  color: var(--accent);
-  border: 1px solid var(--accent-dim);
-}
-
-.card-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 3px; flex: 1; }
-
-.card-title {
-  font-size: 13.5px;
-  font-weight: 700;
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  min-height: 2.6em;
-}
-
-.card-artist {
-  font-size: 12px;
-  color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Like / playlist / more buttons live on the cover art itself: bigger,
-   white icons with a soft green glow, glassy circular chips. */
-.cover-actions {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  display: flex;
-  gap: 6px;
-  z-index: 3;
-}
-
-.cov-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
+  top: 6px; left: 6px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 2.5px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.65);
   color: #fff;
-  background: rgba(10, 14, 12, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  pointer-events: none;
 }
 
-.cov-btn svg { width: 18px; height: 18px; }
+/* Hover actions (like / playlist / more / download) — Spotify hides these
+   until you hover; on touch they live in the mini player + Now Playing. */
+.cover-actions, .dl-top { display: none; }
 
-.cov-btn:active {
-  background: var(--accent);
-  color: #04150b;
+.play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 10px;
+  opacity: 0;
+  transition: opacity 0.16s ease;
 }
 
-.cov-btn.liked {
-  color: #ff4d6d;
-  border-color: rgba(255, 77, 109, 0.5);
-}
+.card.playing .play-overlay { opacity: 1; }
 
-.mini-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  color: var(--text-dim);
-  transition: all 0.15s ease;
-}
-
-.mini-btn:hover { color: var(--accent); background: var(--bg-hover); }
-.mini-btn.liked { color: #ff4d6d; }
-.mini-btn.liked:hover { color: #ff4d6d; background: rgba(255, 77, 109, 0.12); }
-.mini-btn.del:hover { color: var(--danger); }
-
-#np-like.liked { color: #ff4d6d; border-color: rgba(255, 77, 109, 0.6); background: rgba(255, 77, 109, 0.12); }
-
-/* ---------- empty states ---------- */
-
-.empty {
-  padding: 70px 20px;
-  text-align: center;
-  color: var(--text-dim);
-  font-size: 15px;
-  line-height: 1.7;
-}
-
-.empty.small { padding: 30px 20px; font-size: 13.5px; }
-
-.spinner {
+.circle {
   width: 40px;
   height: 40px;
-  margin: 0 auto 16px;
-  border: 3px solid var(--line);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* ---------- player bar ---------- */
-
-.player {
-  position: fixed;
-  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
-  left: 0;
-  right: 0;
-  height: var(--player-h);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-  padding: 6px 14px;
-  background: rgba(10, 13, 11, 0.94);
-  border-top: 1px solid var(--line);
-  backdrop-filter: blur(12px);
-  z-index: 20;
-}
-
-.player-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.player-track {
-  flex: 1;
-  min-width: 0;
-  cursor: pointer;
-  border-radius: 10px;
-  padding: 4px 6px;
-  margin: -4px -6px;
-  transition: background 0.15s ease;
-}
-
-.player-track:hover { background: rgba(255, 255, 255, 0.04); }
-
-.player-cover {
-  width: 52px;
-  height: 52px;
-  border-radius: 10px;
-  object-fit: cover;
-  flex-shrink: 0;
-  box-shadow: 0 0 16px var(--accent-glow);
-}
-
-.player-cover.noimg {
-  display: grid;
-  place-items: center;
-  font-size: 30px;
-  background: #0d110f;
-}
-
-.player-meta {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  overflow: hidden;
-}
-
-/* Title in the center of the player — slides when it doesn't fit (two
-   copies in the track, translateX(-50%) loops seamlessly). */
-.player-title {
-  width: 100%;
-  white-space: nowrap;
-  font-weight: 800;
-  font-size: 15px;
-}
-
-.player-title .tt { display: inline-block; white-space: nowrap; }
-
-.player-title.marquee {
-  /* Pin the track to the left edge of the visible window — otherwise the
-     centered flex alignment starts the title mid-string and leaves a blank
-     gap at the end of each translateX(-50%) cycle. */
-  align-self: flex-start;
-  width: max-content;
-  animation: marquee 14s linear infinite;
-}
-
-@keyframes marquee {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
-
-.player-artist {
-  max-width: 100%;
-  font-size: 12.5px;
-  color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.controls-row {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ctrl {
-  color: var(--text-dim);
-  display: grid;
-  place-items: center;
-  transition: all 0.15s ease;
-}
-
-.ctrl:hover { color: var(--text); }
-
-.ctrl.big {
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  color: #04150b;
-  background: linear-gradient(135deg, var(--accent-strong), #00c95c);
-  box-shadow: 0 3px 18px var(--accent-glow);
-  transition: all 0.15s ease;
-}
-
-.ctrl.big:hover {
-  color: #04150b;
-  filter: brightness(1.08);
-  box-shadow: 0 4px 24px var(--accent-glow);
-}
-
-.seek-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  max-width: 560px;
-}
-
-.time { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; min-width: 36px; }
-.time:last-child { text-align: right; }
-
-/* range inputs */
-input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  flex: 1;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--line);
-  outline: none;
-  cursor: pointer;
-}
-
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
   transition: transform 0.12s ease;
 }
 
-input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.25); }
+.circle:active { transform: scale(0.9); }
 
-/* Seek bar: the streamed/buffered range renders as a line behind the thumb. */
-.seek-wrap {
+.circle svg { width: 20px; height: 20px; }
+
+.card-body { padding: 9px 2px 0; }
+
+.card-title {
+  font-size: var(--fs-card);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card.playing .card-title { color: var(--accent-strong); }
+
+.card-artist {
+  font-size: var(--fs-sub-sm);
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+/* animated "now playing" bars, bottom-left of covers */
+.eq {
+  position: absolute;
+  left: 6px; bottom: 6px;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 4px 5px;
+  background: rgba(0, 0, 0, 0.62);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.eq span {
+  width: 2.5px;
+  height: 12px; /* fixed — the bounce is a scaleY (GPU-composited), never a layout-animated height */
+  transform-origin: bottom;
+  background: var(--accent-strong);
+  animation: eq 0.9s ease-in-out infinite;
+}
+
+.eq span:nth-child(2) { animation-delay: 0.18s; }
+.eq span:nth-child(3) { animation-delay: 0.36s; }
+
+/* Equalizer bounce — pure transform (scaleY), so the bars never trigger a
+   per-frame layout pass. Runs CONTINUOUSLY on every playing card, so it must
+   stay compositor-only for 30fps on weak phones. */
+@keyframes eq {
+  0%, 100% { transform: scaleY(0.33); }
+  50% { transform: scaleY(1); }
+}
+
+/* ----- genre tiles (Home Browse + Search Browse) ----- */
+
+.genre-tile {
   position: relative;
+  height: 92px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  text-align: left;
+  color: #fff;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.genre-tile:active { transform: scale(0.97); filter: brightness(1.15); }
+
+.genre-tile-name {
+  font-size: 16.5px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  padding: 10px 12px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+/* ----- artists ----- */
+
+.artists-row {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding: 4px 16px 8px;
+  scrollbar-width: none;
+}
+
+.artist-item {
+  flex: 0 0 88px;
+  width: 88px;
+  text-align: center;
+  transition: transform 0.12s ease;
+}
+
+.artist-item:active { transform: scale(0.96); }
+
+.artist-ava {
+  display: block;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-hover);
+}
+
+.artist-img { width: 100%; height: 100%; object-fit: cover; }
+
+.artist-img.noimg {
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+}
+
+.artist-name {
+  display: block;
+  margin-top: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ----- mood tiles ----- */
+
+.mood-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  padding: 0 16px;
+}
+
+.mood-chip {
+  position: relative;
+  height: 104px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  padding: 12px;
+  color: #fff;
+  text-align: left;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.mood-chip:active { transform: scale(0.97); filter: brightness(1.15); }
+
+.mood-chip.active { outline: 2px solid #fff; outline-offset: -2px; }
+
+.mood-chip-name { font-size: var(--fs-chip); font-weight: 800; letter-spacing: -0.2px; }
+
+.mood-chip-sub { font-size: 10.5px; opacity: 0.85; margin-top: 2px; }
+
+/* ----- album cards (Albums shelf + search playlists) ----- */
+
+.album-card {
+  flex: 0 0 132px;
+  width: 132px;
+  text-align: left;
+  transition: transform 0.12s ease;
+}
+
+/* Tap press: music cards and playlist/album cards share the same scale-down
+   (via the `scale` property so it never fights card-in's transform fill).
+   Long-press uses the .lpress/.lpress-fire animation below — identical for
+   both card types. */
+.album-card:active, .card:active { scale: 0.96; }
+
+.album-card-cover {
+  display: block;
+  width: 132px;
+  height: 132px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-hover);
+  margin-bottom: 8px;
+}
+
+.album-card-cover img { width: 100%; height: 100%; object-fit: cover; }
+
+.album-card-cover .noimg {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+}
+
+.album-card-name {
+  display: block;
+  font-size: var(--fs-card);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.album-card-artist {
+  display: block;
+  font-size: var(--fs-sub-sm);
+  color: var(--text-dim);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* search-mode playlist shelf — same 2-column stretch grid as the song grid
+   below it, so the cards align edge-to-edge instead of leaving a ragged
+   right edge of fixed-width cards. */
+.playlists-shelf {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px 10px;
+  padding: 4px 16px 8px;
+  overflow-x: visible;
+  scroll-snap-type: none;
+}
+
+.playlists-shelf .section-head { grid-column: 1 / -1; padding-left: 0; }
+.playlists-shelf .section-sub { margin-left: 0; }
+
+/* Search-shelf cards stretch to fill their grid cell (the fixed 132px width
+   is for the horizontal-scroll Albums shelf; the grid needs 100%). */
+.playlists-shelf .album-card {
+  flex: none;
+  width: 100%;
+  min-width: 0;
+}
+
+.playlists-shelf .album-card-cover {
+  width: 100%;
+  aspect-ratio: 1;
+  height: auto;
+}
+
+/* ============================== SEARCH ============================== */
+
+.search-view { padding-top: calc(env(safe-area-inset-top) + 14px); }
+
+.search-title {
+  font-size: var(--fs-hero);
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  padding: 0 16px 14px;
+}
+
+/* Spotify's white pill — black text on white. */
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px;
+  padding: 13px 14px;
+  background: #fff;
+  border-radius: 8px;
+  color: #000;
+}
+
+.search-bar svg { color: #000; flex: 0 0 auto; }
+
+.search-bar input {
   flex: 1;
   min-width: 0;
-  display: flex;
-  align-items: center;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #000;
+  font-size: 15px;
+  font-weight: 500;
 }
 
-.seek-wrap input[type="range"] {
-  width: 100%;
-  background: transparent; /* the buffer line below is the visible track */
-}
+.search-bar input::placeholder { color: #6a6a6a; }
 
-.seek-buffer {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 0%;
-  height: 5px;
-  border-radius: 999px;
-  background: rgba(0, 201, 92, 0.3);
-  pointer-events: none;
-  transition: width 0.15s linear;
-}
-
-.np-seek .seek-buffer { height: 6px; background: rgba(0, 201, 92, 0.32); }
-
-.player-bottom {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 2px;
-}
-
-.player-bottom .seek-row { flex: 1; min-width: 0; max-width: none; }
-
-/* Volume lives in the now-playing view on phones; desktop keeps it here. */
-.player-vol {
+/* type="search" draws its OWN native ✕ inside the field — hide it so the
+   single custom #search-clear button (styled to match) is the only X. */
+.search-bar input::-webkit-search-cancel-button,
+.search-bar input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
   display: none;
+  width: 0;
+  height: 0;
+}
+.search-bar input::-ms-clear { display: none; width: 0; height: 0; }
+
+.search-clear {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #000;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+/* Inline suggestions — a regular section of the Search tab (the old floating
+   dropdown is gone). Sits right below the search bar as part of the page
+   flow: fast text suggestions + tappable rows, then results below. */
+.history-row {
+  margin: 12px 16px 0;
+  background: var(--bg-hover);
+  border-radius: 12px;
+  padding: 6px 4px;
+}
+
+.history-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  padding: 10px 12px 4px;
+}
+
+.chips { display: flex; flex-direction: column; }
+
+.sugg {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.sugg:active { background: rgba(255, 255, 255, 0.1); }
+
+/* text-only title suggestions above the tappable rows */
+.sugg-titles { display: flex; flex-direction: column; }
+.sugg-title {
+  display: flex;
   align-items: center;
   gap: 10px;
-  justify-content: flex-end;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  text-align: left;
+  color: #e8e8e8;
+  font-size: 14px;
+}
+.sugg-title .sugg-search-ic {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  color: #8a8a8a;
+}
+.sugg-title .sugg-t-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sugg-title:active { background: rgba(255, 255, 255, 0.1); }
+
+.sugg-searching { cursor: default; opacity: 0.8; }
+
+.sugg-cover {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--bg-press);
+}
+
+.sugg-cover img { width: 100%; height: 100%; object-fit: cover; }
+
+.sugg-cover .noimg {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+}
+
+.sugg-meta { flex: 1; min-width: 0; }
+
+.sugg-name {
+  display: block;
+  font-size: var(--fs-name);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sugg-kind {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
   color: var(--text-dim);
-  flex-shrink: 0;
-}
-.player-vol input { max-width: 110px; }
-
-@media (min-width: 721px) {
-  .player-vol { display: flex; }
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 3px 6px;
 }
 
-/* ---------- now playing (fullscreen overlay) ---------- */
+.sugg-artist {
+  display: block;
+  font-size: var(--fs-sub);
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+/* results list */
+.search-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 12px 16px;
+}
+
+.search-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  animation: card-in 0.25s ease both;
+  transition: background 0.12s ease;
+}
+
+.search-item:active { background: var(--bg-hover); }
+
+.search-item .si-cover {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.si-img { width: 100%; height: 100%; object-fit: cover; }
+
+.si-img.noimg {
+  display: grid;
+  place-items: center;
+  background: var(--bg-hover);
+  font-size: 18px;
+}
+
+.si-info { flex: 1; min-width: 0; }
+
+.si-name {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.si-artist {
+  font-size: var(--fs-sub);
+  color: var(--text-dim);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.si-dur {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.search-item.playing .si-name { color: var(--accent-strong); }
+
+/* Browse all */
+.search-browse { margin-top: 24px; }
+
+.browse-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  padding: 0 16px;
+}
+
+.browse-grid .genre-tile { height: 100px; }
+
+/* 2-column card grid — the mood results + search results grids both use the
+   .grid class. Cards stretch to fill their cell (instead of stacking as
+   fixed 145px blocks). */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px 10px;
+  padding: 0 16px;
+}
+.grid .card {
+  width: 100%;
+  flex: none;
+  min-width: 0;
+}
+
+/* ============================== HOME HEAD / GREETING ============================== */
+
+/* Custom name in the greeting — "Good morning, John!" (accent-colored). */
+.greet-name { color: var(--accent); }
+
+/* ============================== YOUR LIBRARY ============================== */
+
+.library-view { position: relative; padding-top: calc(env(safe-area-inset-top) + 14px); }
+
+.library-view::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 180px;
+  background: linear-gradient(180deg, rgba(255, 106, 0, 0.12), transparent);
+  pointer-events: none;
+}
+
+.lib-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 16px 8px;
+}
+
+.lib-title { font-size: var(--fs-greeting); font-weight: 800; letter-spacing: -0.4px; }
+
+.lib-add {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.lib-add:active { background: rgba(255, 255, 255, 0.12); color: #fff; }
+
+.lib-chips {
+  position: sticky;
+  top: env(safe-area-inset-top);
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px 10px;
+  background: rgba(18, 18, 18, 0.66);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.lib-wrap { padding-top: 4px; }
+
+.lib-dl-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 0 16px 6px;
+}
+
+.lib-dl-head h3 { font-size: var(--fs-body); font-weight: 800; }
+
+#dl-summary { font-size: 12px; color: var(--text-dim); }
+
+.lib-list {
+  list-style: none;
+  padding: 4px 16px;
+}
+
+/* library rows — 56px square tile + meta (Spotify format) */
+.lib-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  animation: card-in 0.25s ease both;
+}
+
+.lib-item:active { background: var(--bg-hover); }
+
+.lib-item.playing .meta .t { color: var(--accent-strong); }
+
+.lib-cover {
+  position: relative;
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-hover);
+}
+
+.lib-cover img { width: 100%; height: 100%; object-fit: cover; }
+
+.lib-list .lib-item > img {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.lib-noimg {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: var(--bg-hover);
+  font-size: 20px;
+}
+
+/* playlist icon: Spotify-orange gradient tile */
+.pl-ic .lib-noimg {
+  background: linear-gradient(135deg, #ff6a00, #c2410c);
+  color: #000;
+}
+
+.lib-item .meta { flex: 1; min-width: 0; }
+
+.meta .t {
+  font-size: var(--fs-name);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta .a {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-btn {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--text-dim);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.mini-btn:active { background: var(--bg-hover); color: #fff; }
+
+.mini-btn.del:active { color: var(--danger); }
+
+.lib-settings {
+  padding: 28px 16px 32px;
+  border-top: 1px solid var(--line);
+  margin-top: 20px;
+}
+
+.lib-settings h3 {
+  font-size: var(--fs-body);
+  font-weight: 800;
+  margin: 18px 0 6px;
+}
+
+.lib-settings h3:first-child { margin-top: 0; }
+
+.drawer-note {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  line-height: 1.45;
+}
+
+.drawer-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Library → Your name: inline input + save. */
+.lib-name-input {
+  flex: 1;
+  min-width: 120px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 9px 12px;
+  font-size: 14px;
+  outline: none;
+}
+.lib-name-input:focus { border-color: var(--accent); }
+
+.drawer-actions .btn.active { background: var(--accent); color: #000; }
+
+.lib-settings input {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13.5px;
+  padding: 11px 12px;
+  outline: none;
+  margin: 4px 0 8px;
+}
+
+.lib-settings input:focus { border-color: var(--accent); }
+
+.lib-settings input::placeholder { color: var(--text-dimmer); }
+
+.lib-badge { display: none; }
+
+/* ============================== buttons ============================== */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  transition: transform 0.1s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.btn:active { transform: scale(0.96); }
+
+.btn.primary { background: var(--accent); color: #000; }
+.btn.primary:active { background: var(--accent-strong); }
+
+.btn.ghost { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.btn.ghost:active { background: rgba(255, 255, 255, 0.18); }
+
+.btn.sm { padding: 6px 13px; font-size: 12px; }
+
+.btn.block { display: flex; width: 100%; }
+
+.btn:disabled { opacity: 0.5; }
+
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--text-dim);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.icon-btn:active { background: rgba(255, 255, 255, 0.12); color: #fff; }
+
+/* ============================== MINI PLAYER ============================== */
+
+.player {
+  position: fixed;
+  left: 8px; right: 8px;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 8px);
+  height: var(--player-h);
+  /* Toast hosting: the panel grows UP by --toast-h while a toast is shown
+     (.toast-open). Flex column + justify-end pins the mini-row to the
+     bottom; the grown space opens at the top for the toast, and the
+     streaming line (absolute, top:0) rides up with the growth. */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  transition: height 0.45s cubic-bezier(0.2, 0.8, 0.3, 1);
+  border-radius: 16px;
+  /* Glass: translucent frosted panel — the content scrolling underneath
+     shows through blurred + saturated, with a hairline rim for depth.
+     Same translucency as the expanded Now Playing box (0.55) so the mini
+     player and its fullscreen window read as ONE continuous pane. */
+  background: rgba(28, 28, 30, 0.55);
+  backdrop-filter: blur(22px) saturate(1.5);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom-color: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  z-index: 30;
+  overflow: hidden;
+  /* The player is a GESTURE SURFACE (tap = open, hold = peek), not copyable
+     text — a long-press must never open text selection/callout. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* A toast raises the mini player's top edge by the toast's height — the
+   toast IS the top section of the panel, not a floating bar above it. */
+.player.toast-open { height: calc(var(--player-h) + var(--toast-h, 44px)); }
+
+.mini-progress {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.mini-progress-fill {
+  height: 100%;
+  width: 100%;
+  background: #fff;
+  /* scaleX (GPU-composited) instead of width — layout-free, smooth even on
+     slow phones; transform-origin left so it grows from the left edge. */
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s linear;
+  will-change: transform;
+}
+
+.mini-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  /* The bar is a gesture surface: tap-to-expand and swipe-up-to-open. none
+     keeps the browser from hijacking the drag as a page scroll (the bar is
+     fixed; the page behind never scrolls from it). */
+  touch-action: none;
+  cursor: pointer;
+}
+
+.mini-cover {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--bg-hover);
+}
+
+.mini-cover.noimg {
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+}
+
+.mini-info { flex: 1; min-width: 0; overflow: hidden; cursor: pointer; padding: 0 4px; }
+
+.mini-title {
+  font-size: var(--fs-name);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-artist {
+  font-size: var(--fs-sub);
+  color: var(--text-dim);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-like {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  transition: color 0.15s ease, transform 0.1s ease;
+}
+
+.mini-like:active { transform: scale(0.9); }
+
+.mini-like.liked { color: var(--accent-strong); }
+
+#btn-play,
+#np-mini-play {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(255, 106, 0, 0.35);
+  transition: transform 0.1s ease, background 0.15s ease;
+}
+
+#btn-play:active { transform: scale(0.9); background: var(--accent-strong); }
+
+/* ============================== BOTTOM NAV ============================== */
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  /* Fade: solid at the bottom, fully transparent at the top — no hard edge
+     against the content or the mini player above it. */
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.82) 52%, rgba(0, 0, 0, 1) 100%);
+  display: flex;
+  z-index: 40;
+}
+
+.nav-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--text-dim);
+  transition: color 0.15s ease;
+  min-width: 0;
+}
+
+.nav-tab svg { width: 24px; height: 24px; }
+
+.nav-tab:active { color: #fff; }
+
+.nav-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  white-space: nowrap;
+}
+
+.nav-tab.active { color: #fff; }
+
+.ico-filled { display: none; }
+.nav-tab.active .ico-filled { display: block; }
+.nav-tab.active .ico-outline { display: none; }
+
+/* ============================== NOW PLAYING ============================== */
 
 .np-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 50;
+  /* The Now Playing is a WINDOW that grew out of the mini player — the app
+     behind (including the nav tabs) stays fully visible and untouched. The
+     backdrop is TRANSPARENT: it only shields touches, never dims or blurs
+     what's behind, so it reads as the mini player expanding in place. */
+  background: transparent;
+  touch-action: pan-y;
+}
+
+/* OrBeat logo replaces any missing/broken cover art (songs, albums,
+   playlists, queue rows, library tiles). The img fills its square frame
+   with a little breathing room so the logo stays centered and legible. */
+.noimg.logo-fallback {
   display: grid;
   place-items: center;
-  background: rgba(4, 6, 5, 0.72);
-  backdrop-filter: blur(8px);
-  opacity: 0;
-  transition: opacity 0.18s ease;
+  padding: 0;
+  background: var(--bg-hover);
+}
+.noimg.logo-fallback .logo-fb {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 10%;
+  box-sizing: border-box;
+}
+/* Playlist tiles keep their orange gradient behind the logo. */
+.plv-noimg.logo-fallback,
+.pl-ic .lib-noimg.logo-fallback {
+  background: linear-gradient(135deg, #ff6a00, #c2410c);
 }
 
-.np-backdrop.open { opacity: 1; }
+/* Album/playlist overlays open ON TOP of other fullscreen views (e.g. an
+   album tapped inside a genre page) — without this, the equal z-index puts
+   them UNDER the already-open overlay and the open looks like a no-op. */
+#album-backdrop, #plv-backdrop { z-index: 60; }
+
+.np-backdrop:not([hidden]) { animation: none; }
 
 .np {
-  position: relative;
-  overflow: hidden;
-  width: min(94vw, 460px);
-  height: min(92vh, 780px);
+  /* The expanded mini player box: same 8px side insets and bottom position
+     as the mini player (#player), growing all the way up. It reads as ONE
+     continuous glass window — the mini player at its base, the Now Playing
+     inside it — never a full-screen page. */
+  position: absolute;
+  left: 8px; right: 8px;
+  top: 8px;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 8px);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  padding: 44px 34px 34px;
-  border-radius: 26px;
-  border: 1px solid var(--line);
-  background:
-    radial-gradient(520px 340px at 50% -10%, rgba(0, 230, 118, 0.12), transparent 60%),
-    var(--bg-elev);
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65), 0 0 60px rgba(0, 230, 118, 0.08);
-  transform: translateY(26px) scale(0.97);
-  transition: transform 0.22s ease;
-  touch-action: none;
+  padding: calc(env(safe-area-inset-top) + 8px) 26px 14px;
+  overflow: hidden;
+  border-radius: 20px;
+  /* See-through glass: home content stays visible behind the blur (this is
+     the transparent look users love) — dark enough for white text to read
+     on top, light enough that the app clearly shows through. Blur matches
+     the mini player's (22px) so the box reads as ONE pane of glass from
+     the moment it grows out of the bar — no glass change on open/close.
+     !important: the self-update override loads AFTER the bundled sheet, and
+     the OLD bundled rule carried backdrop-filter:none !important for the
+     morph — a plain declaration loses to that, so the blur must be
+     important to stay applied through the open/close states. */
+  background: rgba(28, 28, 30, 0.55);
+  backdrop-filter: blur(22px) saturate(1.5) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.5) !important;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom-color: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  will-change: transform, opacity;
 }
 
-.np-backdrop.open .np { transform: translateY(0) scale(1); }
-.np.dragging { transition: none; }
+/* Swoosh-up entrance: the sheet rises from the bottom edge of the screen —
+   pure translation, no fade. Tapping the mini player pops the fullscreen
+   Now Playing view up over the content like Spotify. */
+.np-backdrop.open .np { animation: np-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) both; }
+/* After a shared-element morph the panel is already in place. The temporary
+   morph-open class is removed when the morph finishes, which would otherwise
+   re-enable np-in and fire a SECOND slide-up right after the cover finished
+   traveling. np-settled keeps the swoosh suppressed for the rest of the
+   open — the art already moved; the panel must not. */
+.np-backdrop.open .np.np-settled { animation: none; }
+
+/* Shared-element open (tap / swipe-up the mini player): the whole-panel
+   swoosh is suppressed — the COVER morphs from the mini cover's rect to its
+   final centered position while the rest of the content fades up after it.
+   The mini player keeps running underneath (same layer, just covered). The
+   blur is KEPT through the grow so the glass never changes mid-transition
+   (dropping it made the content behind snap sharp, which read as an opacity
+   jump) — the panel's will-change promotes it to its own layer, so the
+   scale stays GPU-composited. The !important blur beats the old bundled
+   backdrop-filter:none !important from a previous build. */
+.np-backdrop.morph-open .np {
+  animation: none !important;
+  backdrop-filter: blur(22px) saturate(1.5) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.5) !important;
+}
+.np-backdrop.morph-open .np-info,
+.np-backdrop.morph-open .np-seek,
+.np-backdrop.morph-open .np-controls,
+.np-backdrop.morph-open .np-ai,
+.np-backdrop.morph-open .np-vol-line {
+  animation: np-fade-up 0.45s ease 0.15s both;
+}
+@keyframes np-fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes np-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* Overlay close — a plain downward slide, no fade. Driven by
+   closeWithAnim()/closeOverlay() in app.js; the `to`-only keyframes start
+   from the element's current computed style so a pull-down close continues
+   the drag's slide instead of snapping back. */
+.np-backdrop.closing { animation: none; }
+.np-backdrop.closing .np { animation: panel-out 0.3s cubic-bezier(0.4, 0, 0.25, 1) both; }
+@keyframes panel-out { to { transform: translateY(100%); } }
+
+/* Context menu + sleep timer sheets slide back down on close — pure
+   translation, no fade. The backdrop stays solid until the sheet finishes. */
+.ctx-backdrop.closing { animation: none; }
+.ctx-panel.closing { animation: sheet-down 0.32s cubic-bezier(0.4, 0, 0.25, 1) both; }
+.sheet-panel.closing { animation: sheet-down 0.32s cubic-bezier(0.4, 0, 0.25, 1) both; }
+@keyframes sheet-down { to { transform: translateY(100%); } }
 
 .np-glow {
   position: absolute;
   inset: 0;
+  background: linear-gradient(180deg, rgba(255, 106, 0, 0.22), rgba(255, 106, 0, 0.06) 45%, transparent 78%);
+  opacity: 0.4;
   pointer-events: none;
-  background: radial-gradient(300px 200px at 50% 30%, rgba(0, 230, 118, 0.16), transparent 70%);
 }
 
+/* The streaming line — the mini player's white progress line rides onto the
+   top edge of the expanded box, so the whole thing stays one identity. */
+.np-progress {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 20px 20px 0 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.np-progress .mini-progress-fill {
+  height: 100%;
+  width: 100%;
+  background: #fff;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s linear;
+  will-change: transform;
+}
+
+#np-backdrop .np { z-index: 2; }
+
+/* While a pull-down drag is live the sheet follows the finger via inline
+   transforms only — the swoosh-up entrance (fill-mode) must not fight it.
+   The blur is KEPT through the drag too: the finger is collapsing the box
+   onto the mini bar, and the glass must stay the same pane the whole way
+   (dropping it snapped the content sharp mid-gesture). The panel's
+   will-change promotes it to its own layer, so the scale stays a pure
+   GPU-composited transform. */
+.np.dragging {
+  animation: none !important;
+  transition: none !important;
+  backdrop-filter: blur(22px) saturate(1.5) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.5) !important;
+}
+/* Freeze EVERY descendant animation (marquee titles, breathing cover, queue
+   entrances) during the live drag — a running child animation would force
+   the fading body layer to re-rasterize every frame and stutter the drag.
+   The content is fading out anyway; a frozen frame is invisible. */
+.np.dragging *,
+.np.dragging *::before,
+.np.dragging *::after {
+  animation: none !important;
+}
+
+/* Closing: the box shrinks back into the mini player bar — a STAGED,
+   CONNECTED handoff (the reverse of the opening grow):
+     1) the Now Playing contents (title, art, seek, controls, Up Next, …)
+        fade OUT in place — nothing moves, nothing gets squeezed;
+     2) the box (now empty glass) collapses about its bottom edge down to
+        the mini player footprint while its glass fades away, revealing the
+        mini bar underneath;
+     3) the box's glass fades to transparent, revealing the mini player bar
+        underneath — shown at full opacity the whole time (it IS the
+        collapsed box: same footprint), so it never disappears or re-appears.
+   The scale + counter-scale + panel fade are driven inline from
+   closeNowPlaying() and the swipe-down settle; the ONLY animated CSS
+   properties here are opacity and the transforms set inline — no
+   background/paint transitions. The blur is KEPT during the close so the
+   glass matches the mini bar it collapses onto — no sharp-content snap.
+   (The panel's will-change keeps the scale GPU-composited.) */
+.np.np-closing {
+  backdrop-filter: blur(22px) saturate(1.5) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.5) !important;
+}
+
+
+/* The morph-open rule fires np-fade-up (opacity 0→1) on the chrome while
+   the box is open; during a close that animation would override the
+   fade-out and keep the contents frozen on screen — kill it. */
+.np.np-closing .np-info,
+.np.np-closing .np-seek,
+.np.np-closing .np-controls,
+.np.np-closing .np-ai,
+.np.np-closing .np-vol-line {
+  animation: none !important;
+}
+
+.np.np-closing .np-glow,
+.np.np-closing .np-progress,
+.np.np-closing .np-context,
+.np.np-closing .np-close-x,
+.np.np-closing .np-info,
+.np.np-closing .np-seek,
+.np.np-closing .np-controls,
+.np.np-closing .np-ai,
+.np.np-closing .np-vol-line,
+.np.np-closing .np-tier,
+.np.np-closing .np-art {
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+/* Generic shared-element close for the album / playlist / queue / genre
+   overlays: the panel's whole content fades OUT fast while the box collapses
+   into the mini bar footprint (the Now Playing close, minus the in-box mini
+   row). Scoped to those views so the Now Playing mini row (which must stay
+   visible, counter-scaled) is never touched. */
+.np.np-closing.album-view > *,
+.np.np-closing.plv-view > *,
+.np.np-closing.genre-view > *,
+.np.np-closing.queue-view > * {
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+/* The in-flow Now Playing content (art, info, seek, controls, queue, volume)
+   lives in .np-body. During a close it STAYS in place and fades OUT fast
+   (while the box is still ~90% tall, so nothing visibly squashes) — it is
+   NOT counter-scaled, so no big composited layer is ever kept in sync while
+   the box collapses; the drag stays cheap. Only opacity is animated here. */
+.np-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  will-change: opacity;
+}
+
+/* The mini player row INSIDE the box's base — one connected box with the
+   Now Playing. Sits at the box's bottom (absolute), hidden while the box is
+   open. During a close it's counter-scaled with the content (same 1/sy
+   about the box bottom-center) so it stays fixed at natural size and fills
+   the collapsing box's 64px base — the box becomes the mini player. Fades in
+   as the Now Playing contents fade out; display-only (pointer-events:none),
+   the interactive bar (#player) underneath takes over at the same footprint. */
+.np-mini {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: var(--player-h);
+  background: transparent;
+  border-radius: 0 0 20px 20px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+  will-change: transform, opacity;
+}
+.np.np-closing .np-mini {
+  opacity: 1;
+  transition: opacity 0.25s ease 0.16s;
+}
+
+/* drag handle zone + down-chevron */
 .np-close {
   position: absolute;
-  top: 18px;
-  right: 18px;
-  z-index: 2;
+  top: 0; left: 0; right: 0;
+  height: 44px;
+  z-index: 3;
+}
+
+.np-close-x {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 10px);
+  left: 10px;
   width: 38px;
   height: 38px;
-  border-radius: 50%;
   display: grid;
   place-items: center;
+  border-radius: 50%;
   color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--line);
-  transition: all 0.15s ease;
+  z-index: 4;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 
-.np-close:hover { color: var(--accent); border-color: var(--accent); }
+.np-close-x:active { background: rgba(255, 255, 255, 0.12); color: #fff; }
 
+/* Small OrBeat brand mark — top-left of the album & playlist overlays.
+   Sits in its own mini header strip (the album-head is pushed down to make
+   room) so it never covers the cover art. Below the top drag-close zone. */
+.view-logo {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 10px);
+  left: 14px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.album-view .album-head, .plv-view .album-head {
+  padding-top: 44px; /* room for the brand logo bar above the cover */
+}
+
+/* Up Next chip — inline in the OrBeat Trivia header row, on the OPPOSITE
+   side of the title (right edge). Bold label + list icon; the whole chip
+   is tappable and opens the fullscreen Up Next (queue) view. Icon stays
+   orange (the brand accent); the label is bold white. */
+.np-queue-btn.np-queue-inline {
+  position: static;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  height: 32px;
+  padding: 0 10px;
+  margin: 0 -4px 0 10px;
+  border-radius: 12px;
+  color: var(--accent-strong);
+}
+.np-queue-btn.np-queue-inline svg { display: block; flex: 0 0 auto; }
+.np-queue-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+  white-space: nowrap;
+}
+.np-queue-btn.np-queue-inline:active { background: rgba(255, 255, 255, 0.1); }
+/* The sheet header (ORBEAT TRIVIA + Up Next) is a FIXED row — it never
+   scrolls, and the description below it never slides under it. No backdrop
+   needed: the description lives in its OWN scroll area underneath, so the
+   two can't overlap. */
+.np-ai-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  padding-bottom: 6px;
+}
+
+/* About this song — the header row + a scrollable description area below.
+   With the NEW structure (.np-ai-scroll present) the sheet is a plain flex
+   column and only the inner .np-ai-scroll scrolls, so the header stays
+   fixed and the description can never slide under it. The fallback (.np-ai
+   WITHOUT .np-ai-scroll — older bundled HTML) keeps the sheet itself
+   scrollable so the description never dead-ends there either. */
+.np-ai {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+/* The new structure's sheet doesn't scroll — the inner .np-ai-scroll owns
+   it (the shared fallback keeps #np-ai scrollable for older bundled HTML
+   without .np-ai-scroll). */
+.np-ai.np-ai-scrolled {
+  overflow-y: visible;
+}
+/* The scrollable description area — everything below the header row. The
+   volume line + fade stay pinned at the panel's bottom, so this area is
+   exactly the gap between the header and the volume. */
+.np-ai-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.np-ai-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+  /* Brand split like the logo: the outer words stay white, BEAT burns
+     orange — same treatment as the OrBeat wordmark in the boot hero. */
+}
+.np-ai-title .np-ai-o { color: var(--accent-strong); }
+/* Only the BEAT letters stay white; the rest of the title is orange. */
+.np-ai-title .np-ai-w { color: rgba(255, 255, 255, 0.9); }
+.np-ai-title .np-ai-beat { color: var(--accent-strong); }
+.np-ai-body {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.88);
+  white-space: pre-wrap;
+}
+.np-ai-body.loading {
+  color: var(--text-dimmer);
+  /* Gentle breathing pulse so the loading state feels alive — opacity
+     only, compositor-friendly (no layout churn). */
+  animation: np-ai-loading-pulse 1.6s ease-in-out infinite;
+}
+@keyframes np-ai-loading-pulse {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 1; }
+}
+.np-ai-src {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-dimmer);
+  /* Sentence case, not all-caps — "Powered by OrBeat" must read as-is. */
+  text-transform: none;
+}
+/* Bottom fade STARTING AT the volume line's top edge: a soft gradient that
+   melts the last line of the description into the glass right where the
+   volume control begins — no gap, no dark band over the text. Pinned to the
+   panel bottom (absolute in .np-body, which wraps the volume too), so it
+   stays at the volume's border whether the sheet is collapsed or expanded
+   and never rides the description scroll. JS toggles .clipped only while the
+   sheet actually overflows, so the fade disappears at the end. */
+.np-ai-fade {
+  position: absolute;
+  left: 0; right: 0;
+  /* Anchored to the .np panel (which owns the layout bottom), not .np-body:
+     bottom: 31px = distance from the panel's bottom edge to the volume
+     line's TOP — the fade's base lands exactly on the volume's border. */
+  bottom: 31px;
+  height: 26px;
+  background: linear-gradient(to top, rgba(28, 28, 30, 0.5), rgba(28, 28, 30, 0));
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.np-ai-scroll.clipped ~ .np-ai-fade { opacity: 1; }
+/* The orange chevron rides ABOVE the fade so it stays fully visible. */
+.np-ai-more { z-index: 3; }
+/* Orange chevron (V) at the bottom-center of the About sheet, above the
+   volume line. Sticky so it stays visible at the sheet's base while the
+   description scrolls. Tap to expand the sheet (chevron flips to ^); tap the
+   description to collapse back to the normal Now Playing layout. */
+.np-ai-more {
+  flex: 0 0 auto;
+  position: sticky;
+  bottom: -2px;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 26px;
+  margin-top: 2px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.np-ai-more:active { transform: scale(0.92); }
+.np-ai-more svg {
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.np.np-expanded .np-ai-more svg { transform: rotate(180deg); }
+
+/* Centered "Now Playing" label (Spotify) between the two top buttons */
+.np-context {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 19px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  z-index: 4;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* album art — large square, centered (Spotify), soft shadow beneath. The
+   viewport-height cap keeps the controls + volume visible on short screens. */
 .np-art {
   position: relative;
-  z-index: 1;
-  width: min(64vw, 250px);
+  /* Leave room for title/seek/controls/queue/volume — without it the info
+     row (title+heart) gets crushed to nothing. "More on <artist>" lives
+     INSIDE the scrollable Up Next list, so it takes no fixed space here. */
+  width: min(84vw, 360px, calc(100vh - 430px));
   aspect-ratio: 1;
-  border-radius: 20px;
+  border-radius: 0;
   overflow: hidden;
-  background: #0a0d0b;
-  box-shadow: 0 14px 50px rgba(0, 0, 0, 0.55), 0 0 34px var(--accent-glow);
+  margin: calc(env(safe-area-inset-top) + 40px) auto 16px;
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.5);
+  background: var(--bg-hover);
+  flex: 0 0 auto;
+}
+/* About sheet expanded: the description takes the full readable height —
+   the cover, title and player controls push up and shrink to make room. */
+.np.np-expanded .np-art {
+  width: min(56vw, 200px, max(110px, calc(100vh - 520px)));
+}
+.np.np-expanded .np-tier { display: none; }
+/* 30fps expand/collapse: the width SNAPS instantly and the FLIP in
+   npAiSetExpanded pins every moved element (art + info/seek/tier/controls)
+   back to its old spot, then glides them home with PURE transform
+   transitions — no per-frame layout reflow, so the push-up runs at the
+   compositor's rate. Scoped to .animating so nothing else is affected. */
+.np.animating .np-art,
+.np.animating .np-info,
+.np.animating .np-seek,
+.np.animating .np-tier,
+.np.animating .np-controls {
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 
-.np-art img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
+.np-art img { width: 100%; height: 100%; object-fit: cover; }
 
 .np-art .noimg {
   width: 100%;
   height: 100%;
   display: grid;
   place-items: center;
-  font-size: 72px;
-  color: #2c322e;
-  background: radial-gradient(circle at 30% 25%, #101612, #0a0d0b 70%);
+  font-size: 40px;
+  background: var(--bg-hover);
 }
 
+.np-art.np-art-in, .np-art.live { animation: np-art-in 0.4s ease both; }
+
+@keyframes np-art-in {
+  from { opacity: 0; transform: scale(0.93) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Track-change slide in Now Playing (non-touch next/prev fallback): a long,
+   gentle pure-translation slide — NO fade on the cover. The touch path
+   (drag + fling) runs in JS and needs no keyframes. Placed after the
+   np-art-in rules so they win over .live when both classes are present, and
+   touch-action: pan-y on the art/info makes horizontal swipes ours while
+   vertical scroll still works everywhere else. */
+.np-art { touch-action: pan-y; }
+.np-info { touch-action: pan-y; }
+.np-art.np-slide-left, .np-info-row.np-slide-left { animation: np-slide-left 0.42s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.np-art.np-slide-right, .np-info-row.np-slide-right { animation: np-slide-right 0.42s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes np-slide-left {
+  from { transform: translateX(28%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes np-slide-right {
+  from { transform: translateX(-28%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* While a drag is live the cover/info are moved by inline transforms only —
+   no entrance/breathe animation may fight the finger. */
+.np-art.np-dragging, .np-info-row.np-dragging {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Ghost copy of the old cover during a continuous track-change slide. It
+   lives INSIDE the art frame (clipped by its overflow:hidden) so the leaving
+   cover slides out within the frame while the new cover enters beneath. */
+.np-art-ghost {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: var(--bg-hover);
+}
+.np-art-ghost img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* Spotify-style info row: title/artist left, like heart right. The outer
+   .np-info is the CLIP: the .np-info-row inside is what translates (drag /
+   slide-enter) and the .np-info-ghost (old track's title during a slide) is
+   clipped at the row's edges — same pattern as the cover — so the title
+   change is one continuous motion, never a hard cut or overlap. flex: 0 0
+   auto keeps the row from being crushed when the column is tight (the
+   title/heart must NEVER shrink out of view). */
 .np-info {
   position: relative;
-  z-index: 1;
-  text-align: center;
-  min-width: 0;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-
-.np-title {
-  font-size: 20px;
-  font-weight: 800;
-  line-height: 1.3;
-  max-width: 100%;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  margin-top: 2px;
   overflow: hidden;
+  flex: 0 0 auto;
 }
-
-.np-artist {
-  font-size: 15px;
-  color: var(--text-dim);
-}
-
-.np-source {
-  padding: 3px 12px;
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: var(--accent);
-  background: var(--accent-dim);
-  border: 1px solid var(--accent-dim);
-}
-
-.np-seek {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  max-width: 400px;
-}
-
-.np-seek input[type="range"] { height: 6px; }
-.np-seek input[type="range"]::-webkit-slider-thumb { width: 16px; height: 16px; }
-
-.np-controls {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 34px;
-}
-
-.np-controls .ctrl { color: var(--text); }
-.np-controls .ctrl:hover { color: var(--accent); }
-
-.np-controls .ctrl.big {
-  width: 66px;
-  height: 66px;
-}
-
-.np-controls .ctrl.big svg { width: 32px; height: 32px; }
-
-.np-extra {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  width: 100%;
-  max-width: 400px;
-}
-
-.np-vol {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-dim);
-  flex: 1;
-  min-width: 130px;
-  max-width: 190px;
-}
-
-.np-vol input { max-width: 130px; }/* ---------- library drawer ---------- */
-
-.drawer-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(3px);
-  z-index: 60;
-}
-
-.drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 380px;
-  max-width: 90vw;
-  background: var(--bg-elev);
-  border-left: 1px solid var(--line);
-  z-index: 70;
-  display: flex;
-  flex-direction: column;
-  animation: slide-in 0.22s ease;
-  box-shadow: -20px 0 60px rgba(0, 0, 0, 0.5);
-}
-
-@keyframes slide-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
-
-.drawer-head {
+.np-info-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 20px 10px;
+  gap: 12px;
+  min-width: 100%;
+  will-change: transform;
 }
-
-.drawer-head h2 { font-size: 17px; font-weight: 800; }
-
-.drawer-actions { padding: 0 20px 12px; }
-
-/* In-app updater (desktop app) */
-.drawer-actions.updater {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  padding-top: 0;
-}
-.updater-status {
-  font-size: 12px;
-  color: var(--text-dim);
-  line-height: 1.4;
-  padding: 0 2px;
-}
-
-.drawer-list {
-  list-style: none;
-  overflow-y: auto;
-  padding: 0 10px 10px;
-}
-
-.drawer-section { padding: 4px 20px 8px; }
-.drawer-section h3 {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  margin: 4px 0 8px;
-}
-
-.pl-create { display: flex; gap: 8px; }
-.pl-create input {
-  flex: 1;
-  padding: 9px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-.pl-create input:focus { border-color: var(--accent); }
-
-/* self-update drawer (see update.js + scripts/export-update.mjs) */
-#update-url {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 9px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 13px;
-  outline: none;
-  margin: 2px 0 8px;
-  transition: border-color 0.15s ease;
-}
-#update-url:focus { border-color: var(--accent); }
-.drawer-note {
-  font-size: 12px;
-  color: var(--text-dim);
-  line-height: 1.4;
-  padding: 0 2px;
-}
-
-/* Update-available banner — fixed bar under the topbar, above content. Shown
-   only when a newer self-update bundle has been downloaded and is waiting. */
-.update-banner {
-  position: fixed;
-  top: var(--topbar-h);
-  left: 0;
-  right: 0;
-  z-index: 25;
+.np-info-ghost {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  background: linear-gradient(90deg, rgba(0, 230, 118, 0.16), rgba(0, 230, 118, 0.06));
-  border-bottom: 1px solid var(--accent-dim);
-  backdrop-filter: blur(10px);
-  animation: ub-in 0.25s ease;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+  z-index: 2;
 }
 
-@keyframes ub-in {
-  from { transform: translateY(-8px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
+.np-info-text { flex: 1; min-width: 0; }
 
-.ub-icon {
-  color: var(--accent);
+.np-title {
+  font-size: var(--fs-lg);
   font-weight: 800;
-  font-size: 15px;
-}
-
-.ub-text {
-  flex: 1;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
+  letter-spacing: -0.3px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.np-artist {
+  font-size: var(--fs-body);
+  color: var(--text-dim);
+  margin-top: 3px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.ub-actions { display: flex; gap: 8px; flex-shrink: 0; }
-
-.lib-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-
-.lib-item:hover { background: var(--bg-hover); }
-.lib-item.playing { background: var(--accent-dim); }
-
-.lib-item img {
-  width: 40px;
-  height: 40px;
-  border-radius: 6px;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.lib-noimg {
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  border-radius: 6px;
+.np-like {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
-  background: var(--bg);
-  font-size: 18px;
+  border-radius: 50%;
+  color: var(--text-dim);
+  transition: color 0.15s ease, transform 0.1s ease;
 }
 
-.lib-item .meta { flex: 1; min-width: 0; }
+.np-like:active { transform: scale(0.9); }
+.np-like.liked { color: var(--accent-strong); }
 
-.lib-item .t {
+/* Heart pop micro-interaction when the like state changes inside Now Playing */
+.np-like.pop svg { animation: np-heart-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes np-heart-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.4); }
+  100% { transform: scale(1); }
+}
+
+/* Subtle inline feedback pill (like / queue actions) inside Now Playing */
+.np-flash {
+  position: absolute;
+  top: 52%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: rgba(12, 12, 14, 0.72);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+  color: #fff;
   font-size: 13px;
   font-weight: 600;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  max-width: 82%;
+  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.np-flash.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+.np-flash svg { flex: none; }
+.np-flash span { overflow: hidden; text-overflow: ellipsis; }
+
+/* Mini-player peek: holding the mini player grows the panel UP by --peek-h
+   (.player.peek-open) and this card fills that grown top area — the mini
+   player's top portion expands to reveal the NEXT track live (cover,
+   title/artist, equalizer). Same anatomy as the toast: absolute, pinned just
+   above the mini-row (bottom: var(--player-h)), eaten by the panel's top
+   edge when the panel retracts (overflow:hidden clips it). Transform-only
+   entrance (GPU-composited). */
+.mini-peek {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: var(--player-h);
+  height: calc(var(--peek-h, 58px) - 3px);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(16, 16, 18, 0.55);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  z-index: 3;
+  will-change: transform, opacity;
+  transition: transform 0.18s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.18s ease;
+}
+
+.mini-peek.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Dismissal: the up-next card is PUSHED DOWN (slides into the mini-row
+   area) while the panel retracts — the current song below takes its place.
+   Transform + opacity only, so it stays compositor-cheap. */
+.mini-peek.hide {
+  opacity: 0;
+  transform: translateY(calc(var(--peek-h, 58px)));
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.25, 1), opacity 0.25s ease;
+}
+
+/* The mini player grows UP by --peek-h while a peek is revealed — the card
+   lives in that grown space, and the panel's retract eats it on release. */
+.player.peek-open { height: calc(var(--player-h) + var(--peek-h, 58px)); }
+
+.np-peek-cover {
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-hover);
+}
+.np-peek-cover img { width: 100%; height: 100%; object-fit: cover; }
+.np-peek-cover .noimg {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+}
+
+.np-peek-info { flex: 1; min-width: 0; }
+
+.np-peek-label {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+  margin-bottom: 2px;
+}
+
+.np-peek-title {
+  font-size: 13px;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.lib-item .a {
+.np-peek-artist {
   font-size: 11.5px;
   color: var(--text-dim);
   white-space: nowrap;
@@ -1804,178 +2221,1432 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.25); }
   text-overflow: ellipsis;
 }
 
-/* playlist accordion + popover */
-.pl-tracks {
-  margin: 2px 0 4px 50px;
-  border-left: 1px solid var(--line);
-  padding-left: 6px;
+/* Tiny equalizer — three bars that bounce while the preview audio plays. */
+.np-peek-live {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 2.5px;
+  height: 16px;
 }
-.pl-tracks .lib-item { padding: 6px 8px; }
-.pl-tracks .lib-item img, .pl-tracks .lib-noimg { width: 30px; height: 30px; }
+.np-peek-live span {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent-strong);
+  height: 100%;
+  transform-origin: bottom;
+  animation: np-eq 0.9s ease-in-out infinite;
+}
+.np-peek-live span:nth-child(2) { animation-delay: 0.18s; }
+.np-peek-live span:nth-child(3) { animation-delay: 0.36s; }
+/* Preview equalizer — pure transform (scaleY), never a layout-animated
+   height; runs continuously while preview audio plays. */
+@keyframes np-eq {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+/* seek */
+.np-seek {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  flex: 0 0 auto; /* never let the column squeeze the seek bar */
+}
+
+.time {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  min-width: 34px;
+  text-align: center;
+}
+
+.seek-wrap {
+  position: relative;
+  flex: 1;
+  height: 28px; /* generous touch target — a 3px line is untappable on a phone */
+  display: flex;
+  align-items: center;
+}
+
+.seek-buffer,
+.seek-fill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 3px;
+  width: 100%;
+  transform: translateY(-50%);
+  transform-origin: left;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.seek-buffer {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* The played portion — its own thin line so the input can be a tall,
+   transparent hit area (a 3px-tall input box is nearly impossible to grab). */
+.seek-fill {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-50%) scaleX(0);
+  z-index: 1;
+}
+
+/* range inputs (NP seek + volume) */
+#np-seek, #np-volume {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* The input itself is a TALL transparent hit area; the visual 3px line comes
+   from .seek-buffer/.seek-fill below it. */
+#np-seek {
+  height: 28px;
+  border-radius: 2px;
+  background: transparent;
+}
+
+#np-seek::-webkit-slider-runnable-track { height: 3px; background: transparent; border: none; }
+/* Spotify: the seek thumb only appears while scrubbing (or hovering) */
+#np-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  margin-top: -5.5px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+#np-seek:hover::-webkit-slider-thumb,
+#np-seek:active::-webkit-slider-thumb,
+#np-seek:focus-visible::-webkit-slider-thumb { opacity: 1; }
+
+#np-seek::-moz-range-track { height: 3px; background: transparent; }
+#np-seek::-moz-range-thumb {
+  width: 14px; height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+#np-seek:hover::-moz-range-thumb,
+#np-seek:active::-moz-range-thumb,
+#np-seek:focus-visible::-moz-range-thumb { opacity: 1; }
+
+/* Touch devices: `:active` doesn't always fire mid-scrub in WebViews, so keep
+   the thumb visible for the phone-first audience (Spotify shows it while
+   dragging). */
+@media (hover: none) {
+  #np-seek::-webkit-slider-thumb,
+  #np-seek::-moz-range-thumb { opacity: 1; }
+}
+
+#np-volume { height: 16px; }
+#np-volume::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.25);
+}
+#np-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #fff;
+  margin-top: -4px;
+}
+#np-volume::-moz-range-track { height: 3px; background: rgba(255, 255, 255, 0.25); }
+#np-volume::-moz-range-thumb { width: 11px; height: 11px; border: none; border-radius: 50%; background: #fff; }
+
+/* controls row — big white play, dim shuffle/repeat */
+/* Streaming adaptation chip — tiny, dim, non-interactive. The dot glows
+   orange when the truncation cushion is active (repeated mid-chunk cuts
+   widened the buffer window) so the app's self-tuning is visible at a
+   glance without ever distracting from the music. */
+.np-tier {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 2px 0;
+  flex: 0 0 auto;
+  pointer-events: none;
+  user-select: none;
+}
+
+.np-tier-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.np-tier.cushion .np-tier-dot {
+  background: var(--accent-strong);
+  box-shadow: 0 0 8px rgba(255, 106, 0, 0.8);
+}
+
+#np-tier-text {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-dimmer);
+  white-space: nowrap;
+}
+
+.np-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding: 0 2px;
+  flex: 0 0 auto; /* never let the column squeeze the transport controls */
+}
+
+.np-ctrl {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  transition: transform 0.1s ease;
+}
+
+.np-ctrl:active { transform: scale(0.9); }
+
+.np-play {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 8px 26px rgba(255, 106, 0, 0.4);
+  transition: transform 0.12s ease, background 0.15s ease;
+}
+
+.np-play:active { transform: scale(0.94); background: var(--accent-strong); }
+
+.mode-btn {
+  position: relative; /* anchors the repeat-one '1' badge */
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  transition: color 0.15s ease;
+}
+
+.mode-btn.active { color: var(--accent-strong); }
+
+/* Repeat-one '1' badge, anchored to the repeat button (.mode-btn is relative). */
+.repeat-one-badge {
+  position: absolute;
+  bottom: 3px;
+  right: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--accent-strong);
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* Volume — the app's only visible volume control; kept subtle at the bottom */
+.np-vol-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dimmer);
+  width: min(100%, 230px);
+  margin: 8px auto 0;
+  padding: 0 4px;
+  flex: 0 0 auto;
+}
+
+.np-vol-line svg { flex: 0 0 auto; }
+
+/* "More on <artist>" — suggested albums + songs at the end of an album /
+   playlist track list. Sits inside the scroll container (after the last
+   track) and mirrors the compact card rows used on Home. */
+.album-more {
+  padding: 18px 2px 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 10px;
+}
+.album-more .genre-sec-title { margin: 0 10px 6px; }
+.album-more .hrow { padding-left: 8px; padding-right: 8px; scroll-padding-inline: 8px; }
+.album-more .album-card { flex: 0 0 150px; }
+.album-more .card { flex: 0 0 138px; }
+
+/* "More on <artist>" — suggested albums + songs after the search results,
+   same treatment as the album/playlist pages' More on section. */
+.search-more {
+  padding: 18px 2px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 10px;
+}
+.search-more-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  color: #fff;
+  padding: 0 14px 2px;
+}
+.search-more .hrow { padding-left: 8px; padding-right: 8px; scroll-padding-inline: 8px; }
+.search-more .album-card { flex: 0 0 150px; }
+.search-more .card { flex: 0 0 138px; }
+
+/* ============================== ALBUM + GENRE OVERLAYS ============================== */
+
+.album-view, .genre-view, .plv-view {
+  scrollbar-width: none;
+}
+
+.album-view, .plv-view {
+  /* Keep .np's absolute inset:0 sizing (a relative position would let the
+     view grow to its content height and kill scrolling) — .np is already
+     the positioning ancestor for .album-glow / .np-close. Only the track
+     list scrolls now; the cover/title header stays pinned at the top.
+     Left/right padding is tightened from .np's 26px so the cover + title
+     sit closer to the edge. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 18px);
+}
+
+.genre-view {
+  overflow-y: auto;
+}
+
+/* full-screen backdrop painted from the album art, like Now Playing */
+.album-glow {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 440px;
+  background: linear-gradient(180deg, rgba(255, 106, 0, 0.22), rgba(255, 106, 0, 0.06) 45%, transparent 78%);
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+/* Spotify-style action row under the album head: flat add-to-playlist +
+   download icons sit at the LEFT corner, the orange play circle at the
+   right (space-between pushes the two groups apart). */
+.album-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 14px 12px;
+  flex: 0 0 auto;
+}
+
+.album-acts {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.album-play-all {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 8px 22px rgba(255, 106, 0, 0.4);
+  transition: transform 0.12s ease, background 0.15s ease;
+}
+
+.album-play-all:active { transform: scale(0.92); background: var(--accent-strong); }
+
+.album-play-all svg { width: 24px; height: 24px; }
+
+/* Add-to-playlist + download header icons — FLAT (no circle background),    Spotify-style: plain icons to the left of the orange play circle. */
+.album-act {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  color: rgba(255, 255, 255, 0.92);
+  transition: color 0.15s ease, transform 0.1s ease;
+}
+.album-act:active { color: #fff; transform: scale(0.9); }
+.album-act svg { width: 24px; height: 24px; }
+
+.album-head {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  padding: 10px 14px 12px;
+  flex: 0 0 auto;
+}
+
+.album-art {
+  position: relative;
+  flex: 0 0 112px;
+  width: 112px;
+  height: 112px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-hover);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* cover entrance on open, same as the Now Playing art */
+.album-art.album-art-in { animation: np-art-in 0.4s ease both; }
+
+.album-art img { width: 100%; height: 100%; object-fit: cover; }
+
+.album-art .noimg {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+}
+
+/* playlist page cover tile: Spotify-orange gradient placeholder */
+.plv-noimg {
+  background: linear-gradient(135deg, #ff6a00, #c2410c);
+  color: #fff;
+}
+
+.album-meta { flex: 1; min-width: 0; }
+
+.np-source {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--accent-strong);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+}
+
+.album-name {
+  font-size: var(--fs-xl);
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  margin-top: 4px;
+  line-height: 1.15;
+}
+
+.album-artist {
+  font-size: var(--fs-name);
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.album-meta2 {
+  font-size: 12px;
+  color: var(--text-dimmer);
+  margin-top: 6px;
+}
+
+.album-tracks {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 0 10px 24px;
+}
+
+.album-track {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  border-radius: 8px;
+  transition: background 0.12s ease;
+}
+
+.album-track:active { background: var(--bg-hover); }
+
+.album-track .t-cover {
+  position: relative;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--bg-hover);
+}
+
+.t-cover img { width: 100%; height: 100%; object-fit: cover; }
+
+.t-cover .noimg {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+}
+
+.t-info { flex: 1; min-width: 0; }
+
+.t-name {
+  font-size: var(--fs-name);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.t-artist {
+  font-size: var(--fs-sub);
+  color: var(--text-dim);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.album-track.playing .t-name { color: var(--accent-strong); }
+
+.t-dur {
+  font-size: var(--fs-sub);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+/* Row download icon — quick save/remove per album/playlist row, mirroring
+   the card download buttons (state reflected by refreshDownloadButtons). */
+.row-dl {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: none;
+  border: 0;
+  color: var(--text-dim);
+  opacity: 0.5;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+.row-dl:active { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.row-dl.done { color: var(--accent-strong); opacity: 1; }
+.row-dl.busy .dl-spin { display: block; }
+.album-track:hover .row-dl, .album-track:active .row-dl { opacity: 1; }
+@media (hover: none) {
+  .row-dl { opacity: 0.7; }
+}
+
+/* Row ⋮ — the visible affordance for the long-press context menu (Spotify's
+   row "…" button). Fades in on hover/active; always visible on touch. */
+.row-more {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: none;
+  border: 0;
+  color: var(--text-dim);
+  opacity: 0.4;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.12s ease;
+}
+.row-more:active { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.album-track:hover .row-more, .album-track:active .row-more { opacity: 1; }
+@media (hover: none) {
+  .row-more { opacity: 0.6; }
+}
+
+.album-track.playing .t-cover .eq { display: flex; }
+
+/* genre page — tinted header from --g1/--g2 (set by openGenrePage) */
+.genre-view {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* genre-tinted top fade melting into the base (Home-header treatment) */
+.genre-banner {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 300px;
+  background: linear-gradient(180deg, var(--g1, #ff6a00) 0%, var(--g2, #c2410c) 52%, rgba(18, 18, 18, 0) 100%);
+  pointer-events: none;
+}
+
+.genre-head {
+  position: relative;
+  padding: calc(env(safe-area-inset-top) + 26px) 16px 20px;
+}
+
+#genre-title {
+  font-size: var(--fs-hero);
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  line-height: 1.1;
+}
+
+#genre-sub { margin: 8px 0 0; }
+
+/* genre page — Spotify-Browse style: 2-column playlists grid + song list */
+.genre-pl-sec,
+.genre-songs-sec {
+  position: relative;
+}
+
+.genre-sec-title {
+  font-size: var(--fs-name);
+  font-weight: 700;
+  color: var(--text);
+  margin: 2px 14px 10px;
+}
+
+.genre-pl-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px 10px;
+  padding: 0 12px 20px;
+}
+
+.genre-pl-grid .album-card {
+  flex: none;
+  width: 100%;
+  min-width: 0;
+}
+
+.genre-pl-grid .album-card-cover {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+}
+
+.genre-tracks {
+  padding: 0 10px 24px;
+}
+
+/* ============================== SHEETS ============================== */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 55;
+  animation: fade-in 0.2s ease both;
+}
+
+.sheet-panel {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: 0;
+  z-index: 60;
+  background: #242424;
+  border-radius: 16px 16px 0 0;
+  padding: 10px 16px calc(env(safe-area-inset-bottom) + 18px);
+  animation: sheet-up 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.sheet-panel.dragging { animation: none; transition: none; }
+
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.25);
+  margin: 0 auto 12px;
+}
+
+/* queue — fullscreen page, matching the Now Playing/album treatment */
+#queue-backdrop { z-index: 56; } /* above the now-playing view (50) and sheets */
+
+.queue-view { overflow: hidden; }
+
+.queue-glow {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 106, 0, 0.22), rgba(255, 106, 0, 0.06) 45%, transparent 78%);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.queue-title-row {
+  position: relative;
+  z-index: 1;
+  margin: calc(env(safe-area-inset-top) + 46px) 4px 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.queue-title {
+  font-size: var(--fs-hero);
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.queue-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.queue-now-label, .queue-up-label {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 14px 4px 4px;
+}
+
+.queue-now-list { flex: 0 0 auto; }
+.queue-up-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.queue-list { position: relative; z-index: 1; }
+
+.queue-item {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background 0.12s ease, box-shadow 0.15s ease;
+  animation: card-in 0.25s ease both;
+}
+
+.queue-item:active { background: var(--bg-hover); }
+
+/* Floating row: position:fixed pulls it out of flow (siblings close up),
+   and the JS transform tracks the finger 1:1 + a slight scale-up lift. */
+.queue-item.dragging {
+  position: fixed;
+  top: 0;
+  left: 0;
+  margin: 0;
+  box-sizing: border-box;
+  background: var(--bg-hover);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  z-index: 50;
+  will-change: transform;
+  cursor: grabbing;
+  /* Kill the card-in entrance animation while dragging: its `both` fill-mode
+     transform would otherwise override the drag's translate inline style. */
+  animation: none;
+  transition: none;
+}
+/* Collision avoidance: siblings slide aside (smoothly) to open a gap at the
+   drop slot while the held row hovers over them. */
+.queue-item.q-shift {
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Long-press pick-up preview: a subtle scale + shadow so the hold is
+   visible the moment the row becomes grabbable. */
+.queue-item.q-armed {
+  background: var(--bg-hover);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  transform: scale(1.02);
+  transition: transform 0.15s ease, background 0.12s ease;
+}
+
+.queue-item-cover {
+  position: relative;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--bg-hover);
+}
+
+.queue-item-cover img { width: 100%; height: 100%; object-fit: cover; }
+
+.queue-item-cover .noimg {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+}
+
+.queue-item-info { flex: 1; min-width: 0; }
+
+.queue-item-title {
+  font-size: var(--fs-name);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-item-artist {
+  font-size: var(--fs-sub);
+  color: var(--text-dim);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-item-dur {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.queue-grip {
+  flex: 0 0 36px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--text-dim);
+  touch-action: none;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.queue-grip:active { background: rgba(255, 255, 255, 0.1); color: #fff; }
+
+.queue-item.playing .queue-item-title { color: var(--accent-strong); }
+
+/* "Recommendations" hint — groups the tracks the AI topped the queue up with.
+   Same section-label anatomy as Next Up, tinted with the accent and a sparkle. */
+.queue-rec-label {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+  margin: 18px 4px 4px;
+}
+
+.queue-empty {
+  position: relative;
+  z-index: 1;
+  padding: 18px 4px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* sleep timer */
+.sleep-title {
+  font-size: 17px;
+  font-weight: 800;
+  text-align: center;
+  margin: 2px 0 14px;
+}
+
+.sleep-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.sleep-opt {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 13px 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background 0.12s ease, transform 0.1s ease;
+}
+
+.sleep-opt:active { background: rgba(255, 255, 255, 0.18); transform: scale(0.96); }
+
+.sleep-countdown {
+  text-align: center;
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 14px;
+}
+
+/* create playlist */
+.pl-sheet {
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.pl-sheet-title {
+  font-size: var(--fs-chip);
+  font-weight: 800;
+  text-align: center;
+  margin: 2px 0 14px;
+}
+
+.pl-sheet input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 14px;
+  padding: 12px;
+  outline: none;
+}
+
+.pl-sheet input:focus { border-color: var(--accent); }
+
+.pl-sheet input::placeholder { color: var(--text-dimmer); }
+
+.pl-sheet .btn { margin-top: 12px; }
+
+/* install app sheet — Share → Add to Home Screen steps */
+.install-sheet {
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.install-ol {
+  margin: 0 2px 4px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.install-ol b { color: #fff; }
+
+.install-glyph {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  font-weight: 800;
+}
+
+.install-note {
+  align-self: center;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+/* ============================== empty / toast / banner / ptr ============================== */
+
+.empty {
+  padding: 44px 24px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.empty.small { padding: 28px 20px; }
+
+/* search spinner (showEmpty) */
+.spinner {
+  width: 26px;
+  height: 26px;
+  margin: 0 auto 10px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent-strong);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* playlist picker (openPlaylistPicker — anchored popover) */
+@keyframes history-pop {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 .pl-picker {
   position: fixed;
-  z-index: 120;
-  min-width: 200px;
-  max-width: 260px;
-  background: var(--bg-elev);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.6);
+  z-index: 85;
+  min-width: 220px;
+  max-width: 82vw;
+  background: #282828;
+  border-radius: 10px;
   padding: 6px;
-  animation: toast-in 0.15s ease;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  animation: history-pop 0.15s ease both;
 }
 
 .pl-picker-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.6px;
   text-transform: uppercase;
   color: var(--text-dim);
-  padding: 6px 10px 4px;
+  padding: 8px 12px 4px;
 }
 
 .pl-pick {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  padding: 9px 10px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  text-align: left;
-  transition: background 0.12s ease;
-}
-
-.pl-pick:hover { background: var(--bg-hover); color: var(--accent); }
-.pl-pick.new { color: var(--accent); }
-.pl-count { font-size: 11px; color: var(--text-dim); }
-
-/* ---------- toast ---------- */
-
-.toast {
-  position: fixed;
-  bottom: calc(var(--player-h) + var(--nav-h) + 18px);
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 11px 22px;
-  border-radius: 999px;
-  background: var(--bg-elev);
-  border: 1px solid var(--accent);
-  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 7px;
   font-size: 13.5px;
   font-weight: 600;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5), 0 0 18px var(--accent-glow);
-  z-index: 100;
-  animation: toast-in 0.2s ease;
-  /* Long error messages + an action button must never overflow the screen. */
-  max-width: min(92vw, 460px);
-  white-space: normal;
-  line-height: 1.45;
+  text-align: left;
+}
+
+.pl-pick:active { background: rgba(255, 255, 255, 0.1); }
+
+.pl-pick.new { color: var(--accent-strong); }
+
+.pl-count {
+  font-size: 11.5px;
+  color: var(--text-dimmer);
+  font-variant-numeric: tabular-nums;
+}
+
+.toast {
+  /* Lives INSIDE the mini player, anchored to the top of the mini-row (the
+     panel's original top edge). While a toast is shown the player grows UP
+     by --toast-h (.toast-open) and the toast fills that grown space, just
+     below the 3px streaming line (which rides up with the top edge). On
+     dismiss the player RETRACTS and its descending top edge eats the toast
+     — overflow:hidden clips it from the top down. No fade-out.
+     When the player is hidden (no current track) the toast is moved to
+     <body> and becomes .standalone: a floating pill that fades normally. */
+  position: absolute;
+  left: 0; right: 0;
+  bottom: var(--player-h);
+  height: calc(var(--toast-h, 44px) - 3px);
+  box-sizing: border-box;
+  /* Vertical fade: solid at the top (where the text sits), dissolving
+     toward the bottom so the toast melts into the glass panel below. */
+  background: linear-gradient(180deg, rgba(255, 122, 26, 0.98) 0%, rgba(255, 94, 0, 0.92) 42%, rgba(230, 74, 0, 0.6) 68%, rgba(230, 74, 0, 0.05) 100%);
+  color: #fff;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 3;
   display: flex;
   align-items: center;
-  gap: 8px;
-  text-align: center;
+  gap: 10px;
+  max-width: none;
+  text-align: left;
+  /* Fade IN only (appearance); the eat-on-retract does the dismissal. */
+  opacity: 0;
+  transition: opacity 0.4s ease;
 }
 
-.toast.error { border-color: var(--danger); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5); }
+.toast.show { opacity: 1; }
 
-/* Action button inside a toast (e.g. "Retry" the current track). */
-.toast-action {
-  margin-left: 10px;
-  padding: 3px 10px;
-  border: 1px solid var(--accent);
+/* Floating variant: the mini player is hidden (no current track), so the
+   toast stands on its own above the nav — full pill, solid orange. */
+.toast.standalone {
+  position: fixed;
+  left: 8px; right: 8px;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 8px);
+  height: auto;
+  min-height: var(--toast-h, 44px);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ff7a1a 0%, #ff5e00 55%, #e64a00 100%);
+  box-shadow: 0 8px 24px rgba(230, 74, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  z-index: 70;
+}
+
+/* Fullscreen variant: Now Playing / Queue / album overlays are not
+   toast-free anymore — a COMPACT pill floats CENTERED, directly ABOVE the
+   cover art (the empty strip between the panel's top edge and the art),
+   unlike the mini player's full-width toast. It never covers the content
+   and fades in/out. */
+.toast.fullscreen {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: 50%;
+  right: auto;
+  bottom: auto; /* clear the mini-player anchor so it never stretches */
+  transform: translateX(-50%);
+  width: auto;
+  max-width: 78%;
+  height: auto;
+  min-height: 38px;
+  padding: 8px 16px;
   border-radius: 999px;
-  background: transparent;
-  color: var(--accent);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
+  background: linear-gradient(135deg, #ff7a1a 0%, #ff5e00 55%, #e64a00 100%);
+  box-shadow: 0 8px 24px rgba(230, 74, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  z-index: 90;
+}
+
+/* Now Playing toast: instead of the floating capsule, the toast DROPS DOWN
+   from the box's top edge like a peek — parked just above the edge (the box's
+   overflow clips it), slides into view below the 3px streaming line, then
+   slides back UP on dismiss so the rising top edge eats it, exactly like the
+   mini player's toast. The panel gets .toast-open (JS) to drop it. */
+#np-backdrop .np > .toast.np-dropped {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: auto;
+  top: 3px; /* below the streaming line, which rides on the box's top edge */
+  height: calc(var(--toast-h, 44px) - 3px);
+  box-sizing: border-box;
+  border-radius: 0;
+  box-shadow: none;
+  border: 0;
+  z-index: 20;
+  transform: translateY(calc(-100% - 6px)); /* parked fully above the box */
+  transition: transform 0.42s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.3s ease;
+}
+#np-backdrop .np.toast-open > .toast.np-dropped {
+  transform: translateY(0);
+}
+
+.toast .toast-msg {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toast .toast-action {
+  flex: none;
+  background: none;
+  border: 0;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 4px 2px;
   cursor: pointer;
-  transition: all 0.15s ease;
-  vertical-align: middle;
-}
-.toast-action:hover { background: var(--accent-dim); }
-.toast.error .toast-action { border-color: var(--danger); color: var(--danger); }
-.toast.error .toast-action:hover { background: rgba(255, 77, 94, 0.12); }
-
-@keyframes toast-in { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-
-@media (max-width: 720px) {
-  .topbar { gap: 12px; padding: 12px 14px; }
-  .np { padding: 34px 22px 26px; gap: 16px; }
-  .np-art { width: min(70vw, 230px); }
-  .np-title { font-size: 18px; }
-  .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
-
-  /* Compact album header so cover + full title always fit the window. */
-  .album-head { gap: 14px; padding: 42px 16px 12px; }
-  .album-art { width: 96px; height: 96px; flex-basis: 96px; }
-  .album-name { font-size: 16.5px; -webkit-line-clamp: 3; }
-  .album-artist { font-size: 13px; }
-  .album-meta2 { font-size: 11px; }
 }
 
-/* ==========================================================================
-   Natsirt Mobile — touch-first enhancements (PWA + Capacitor WebView)
-   ========================================================================== */
-
-/* No iOS auto text-sizing, no grey tap flash. */
-html {
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-}
-* { -webkit-tap-highlight-color: transparent; }
-
-/* Content scrolls between the top bar and the bottom nav; the fixed player
-   bar (when visible) sits above the nav and shrinks the content further. */
-.content { height: calc(100vh - var(--topbar-h) - var(--nav-h)); }
-body:has(#player:not([hidden])) .content { height: calc(100vh - var(--topbar-h) - var(--nav-h) - var(--player-h)); }
-@supports (height: 100dvh) {
-  .content { height: calc(100dvh - var(--topbar-h) - var(--nav-h) - env(safe-area-inset-bottom)); }
-  body:has(#player:not([hidden])) .content { height: calc(100dvh - var(--topbar-h) - var(--nav-h) - var(--player-h) - env(safe-area-inset-bottom)); }
+.toast.err {
+  background: linear-gradient(180deg, rgba(255, 77, 77, 0.98) 0%, rgba(224, 46, 46, 0.92) 42%, rgba(160, 30, 30, 0.6) 68%, rgba(160, 30, 30, 0.05) 100%);
+  color: #fff;
 }
 
-/* Notched phones: keep controls clear of the home indicator. */
-.topbar {
-  padding-top: calc(14px + env(safe-area-inset-top));
-}
-.drawer {
-  padding-bottom: env(safe-area-inset-bottom);
+.toast.standalone.err {
+  background: linear-gradient(135deg, #ff4d4d 0%, #e02e2e 100%);
+  box-shadow: 0 8px 24px rgba(224, 46, 46, 0.35);
+  color: #fff;
 }
 
-/* No double-tap zoom on controls. */
-.nav-tab, .icon-btn, .btn, .chip, .circle, .cov-btn, .ctrl, .mini-btn, .pl-pick,
-.seek-row input, .player-vol input, .np-vol input {
-  touch-action: manipulation;
+/* ============================== TRACK CONTEXT MENU ============================== */
+
+/* Long-press feedback on cards/rows: while held the row scales down + dims
+   (.lpress), then pulses back up when the threshold hits and the menu fires
+   (.lpress-fire). The `scale` property is used instead of `transform` because
+   .card's entrance animation (card-in) fills `transform` and would win over a
+   class-based transform. */
+.lpress {
+  scale: 0.96;
+  filter: brightness(0.8);
+  transition: scale 0.12s ease-out, filter 0.12s ease-out;
+}
+.lpress-fire {
+  animation: lpress-fire 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes lpress-fire {
+  0%   { scale: 0.96; filter: brightness(0.8); }
+  60%  { scale: 1.05; filter: brightness(1.05); }
+  100% { scale: 1;    filter: brightness(1); }
 }
 
-@media (max-width: 720px) {
-  /* Comfortable 44px+ touch targets. */
-  .icon-btn, .btn { min-height: 44px; }
-  .nav-tab { min-width: 48px; min-height: 48px; }
-  .chip { min-height: 36px; padding: 8px 14px; }
-  .ctrl { min-width: 44px; min-height: 44px; }
-  .ctrl.big { min-width: 52px; min-height: 52px; }
-  .circle { min-width: 46px; min-height: 46px; }
-  .cov-btn { min-width: 34px; min-height: 34px; }
-
-  /* Thicker, easier-to-grab sliders. */
-  input[type="range"] { height: 28px; }
-
-  /* The whole cover is a play button; enlarge the overlay hint. */
-  .play-overlay .circle { transform: translate(-50%, -50%) scale(1.15); }
-
-  /* Compact horizontal rows on small phones. */
-  .hrow .card.compact { min-width: 128px; max-width: 128px; }
+.ctx-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 95;
+  /* No opacity animation — the sheet below provides the motion, so the dim
+     appears solid and disappears only once the sheet has finished closing. */
+  touch-action: none; /* no scroll bleed-through behind the menu */
 }
 
-/* Installed (Add to Home Screen / Capacitor standalone): full-bleed dark bg. */
-@media (display-mode: standalone) {
-  body { background: #070908; }
+.ctx-panel {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 96;
+  background: #1b1b1d;
+  border-radius: 18px 18px 0 0;
+  padding: 8px 10px calc(16px + env(safe-area-inset-bottom));
+  transform: translateY(100%);
+  transition: transform 0.42s cubic-bezier(0.16, 1, 0.3, 1); /* smooth rise, no fade */
+  will-change: transform;
+  max-height: 72vh;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.ctx-panel.open { transform: translateY(0); }
+
+.ctx-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px 13px;
+  margin: 0 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.ctx-t {
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ctx-a {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+.ctx-list { display: flex; flex-direction: column; }
 
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  background: none;
+  border: 0;
+  color: #fff;
+  font-size: 14.5px;
+  font-weight: 500;
+  padding: 13px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.ctx-item:active { background: rgba(255, 255, 255, 0.09); }
+.ctx-item svg { flex: none; opacity: 0.85; }
+.ctx-item span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ============================== MARQUEE ============================== */
+
+.marquee { overflow: hidden; }
+.marquee .m-track {
+  display: inline-block;
+  white-space: nowrap;
+  will-change: transform;
+  animation: marquee-x var(--marq-dur, 10s) linear infinite;
+}
+@keyframes marquee-x {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* Recently Played — horizontal shelf, 4 compact cards per swipe (scroll-snap
+   pages). The whole row scrolls left/right; nothing is hidden, just paged. */
+.recent-list {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 4px 12px 16px;
+  /* Same guard as .hrow: snap pages align to the 12px padded edge so the
+     first page never sticks to the screen's left edge. */
+  scroll-padding-inline: 12px;
+  scrollbar-width: none;
+}
+
+.recent-list::-webkit-scrollbar { display: none; }
+
+.rec-card {
+  flex: 0 0 calc(25% - 8px);
+  scroll-snap-align: start;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+
+/* Each swipe advances a full page (4 cards), not a single card. */
+.rec-card:nth-child(4n) { scroll-snap-stop: always; }
+
+.rec-cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  background: var(--bg-hover);
+}
+
+.rec-img { width: 100%; height: 100%; object-fit: cover; }
+
+.rec-img.noimg {
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+}
+
+.rec-name {
+  display: block;
+  margin-top: 6px;
+  font-size: var(--fs-card);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rec-artist {
+  display: block;
+  font-size: var(--fs-sub-sm);
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rec-card.playing .rec-name { color: var(--accent-strong); }
+
+.update-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(env(safe-area-inset-top) + 10px) 14px 10px;
+  background: var(--accent);
+  color: #000;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ub-icon { font-size: 16px; font-weight: 800; }
+
+.ub-text { flex: 1; min-width: 0; }
+
+.ub-actions { display: flex; gap: 6px; }
+
+/* ============================== SKELETON SHIMMER ============================== */
+
+.skel {
+  position: relative;
+  overflow: hidden;
+  background: #2a2a2a;
+  border-radius: 4px;
+}
+
+.skel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent);
+  transform: translateX(-100%);
+  animation: skel-sweep 1.2s ease infinite;
+}
+
+@keyframes skel-sweep { to { transform: translateX(100%); } }
+
+.skel-card { width: 145px; flex: 0 0 145px; }
+
+.skel-cover { width: 100%; aspect-ratio: 1; border-radius: 6px; }
+
+.skel-line {
+  height: 12px;
+  width: 82%;
+  margin-top: 9px;
+}
+
+.skel-line.short { width: 55%; }
+
+.skel-row.circles .skel-card { width: 88px; flex: 0 0 88px; }
+.skel-row.circles .skel-cover { border-radius: 50%; }
+
+.skel-row.list .skel-card {
+  width: auto;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.skel-row.list .skel-cover { width: 44px; height: 44px; flex: 0 0 44px; }
+.skel-row.list .skel-line { width: 180px; margin: 0; }
+
+#genre-playlists .skel-card,
+#mood-results-grid .skel-card {
+  width: auto;
+  min-width: 0;
+}
+
+/* ============================== animations ============================== */
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================== desktop hover polish ============================== */
+
+@media (hover: hover) {
+  .card-cover-wrap:hover .play-overlay,
+  .card-cover-wrap:focus-within .play-overlay { opacity: 1; }
+
+  .card-cover-wrap:hover .cover-actions { display: flex; }
+
+  .card-cover-wrap:hover .dl-top { display: grid; }
+
+  .genre-tile:hover, .mood-chip:hover { filter: brightness(1.15); }
+
+  .artist-item:hover { transform: scale(1.04); }
+
+  .album-card:hover { transform: scale(1.02); }
+
+  .quick-tile:hover { background: var(--bg-hover); }
+
+  .search-item:hover { background: var(--bg-hover); }
+
+  .lib-item:hover { background: var(--bg-hover); }
+
+  .mini-like:hover { color: #fff; }
+
+  .np-icon-btn:hover { color: #fff; }
+
+  .np-close-x:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+}
+
+/* ============================== small screens ============================== */
+
+@media (max-width: 380px) {
+  .card.compact { width: 145px; flex: 0 0 145px; }
+  .card { width: 138px; flex: 0 0 138px; }
+}

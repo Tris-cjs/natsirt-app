@@ -1,20 +1,694 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>natsirt-app</title>
-<style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #0f1115; color: #e6e9ef; line-height: 1.55; }
-  .wrap { max-width: 560px; margin: 0 auto; padding: 64px 20px; text-align: center; }
-  .muted { color: #5c6373; font-size: 13px; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="format-detection" content="telephone=no" />
+  <title>OrBeat — free music, no limits</title>
+  <!-- Build version, maintained by scripts/bump-version.mjs?v=262 on every sync.
+       The self-update bootstrap compares the hosted manifest against this. -->
+  <meta name="orbeat-build" content="262" />
+  <meta name="theme-color" content="#121212" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="OrBeat" />
+  <!-- Relative paths (./…): the PWA must work from ANY host path — GitHub
+       Pages repo sites serve from /<repo>/, not the domain root. -->
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
+  <link rel="icon" href="./logo.png" />
+  <link rel="stylesheet" href="./style.css?v=262" />
+
+  <!-- Self-update bootstrap: loads engine/brain/app (+update.js) either from
+       the bundled assets or from a NEWER bundle a previous session downloaded
+       and stored locally. See public/update.js?v=262 + scripts/export-update.mjs. -->
+  <script>
+  (function () {
+    'use strict';
+    var meta = document.querySelector('meta[name="orbeat-build"]');
+    var build = (meta && Number(meta.content)) || 0;
+    var override = null;
+    try {
+      var o = JSON.parse(localStorage.getItem('natsirt_update') || 'null');
+      var plain = ['engine', 'brain', 'app', 'style', 'update'].map(function (n) {
+        return n + (n === 'style' ? '.css' : '.js');
+      });
+      var need = plain.slice(0, 4);
+      if (o && o.version && o.version > build && o.files
+          && need.every(function (f) { return typeof o.files[f] === 'string' && o.files[f].length > 0; })) {
+        override = o;
+        document.documentElement.setAttribute('data-override-version', String(o.version));
+      }
+    } catch (e) { /* corrupt override — fall back to bundled */ }
+
+    var files = plain;
+
+    function blobSrc(text, type) {
+      try { return URL.createObjectURL(new Blob([text], { type: type })); }
+      catch (e) { return ''; }
+    }
+
+    function loadNext(i) {
+      if (i >= files.length) return;
+      var name = files[i];
+      if (name === plain[4]) { // update.js?v=262 — always bundled
+        var u = document.createElement('script');
+        u.src = './update.js?v=' + build;
+        u.onload = function () { loadNext(i + 1); };
+        u.onerror = function () { loadNext(i + 1); };
+        document.head.appendChild(u);
+        return;
+      }
+      var isCss = name === plain[3]; // style.css?v=262
+      if (isCss) {
+        if (override) {
+          var st = document.createElement('style');
+          st.textContent = override.files[name];
+          document.head.appendChild(st);
+        }
+        loadNext(i + 1);
+        return;
+      }
+      var el = document.createElement('script');
+      if (override) el.src = blobSrc(override.files[name], 'text/javascript');
+      else el.src = './' + name + '?v=' + build;
+      el.onload = function () { loadNext(i + 1); };
+      el.onerror = function () {
+        if (override) { override = null; loadNext(0); } // blob failed — bundled fallback
+        else loadNext(i + 1);
+      };
+      document.head.appendChild(el);
+    }
+
+    function start() { loadNext(0); }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+    else start();
+  })();
+  </script>
 </head>
 <body>
-<div class="wrap">
-  <p class="muted">natsirt-app — build 77</p>
-</div>
+
+  <!-- Boot splash: an OrBeat hero intro — logo pops in with an orbiting
+       ring, the name rises letter by letter, and a rotating tagline fades
+       under it before the whole hero sweeps away to reveal Home
+       (hideBootSplash in app.js?v=262 enforces a minimum display time so the
+       intro always plays in full). -->
+  <div class="boot-splash" id="boot-splash" aria-hidden="true">
+    <div class="hero">
+      <div class="hero-emblem">
+        <span class="hero-orbit" aria-hidden="true"></span>
+        <img class="boot-logo" src="./logo.png" alt="" />
+      </div>
+      <div class="hero-name" aria-label="OrBeat">
+        <span class="hn">O</span><span class="hn">r</span><span class="hn">B</span><span class="hn">e</span><span class="hn">a</span><span class="hn">t</span>
+      </div>
+      <div class="hero-line" aria-hidden="true"></div>
+      <div class="hero-quote" id="hero-quote">Every beat finds its home.</div>
+    </div>
+  </div>
+
+  <!-- Update-available banner (self-update path) -->
+  <div class="update-banner" id="update-banner" hidden>
+    <span class="ub-icon" aria-hidden="true">↑</span>
+    <span class="ub-text" id="update-banner-text">New version ready</span>
+    <span class="ub-actions">
+      <button type="button" class="btn sm" id="update-banner-apply">Update now</button>
+      <button type="button" class="btn ghost sm" id="update-banner-later">Later</button>
+    </span>
+  </div>
+
+  <!-- Scroll container. data-tab drives the per-page background + top fade. -->
+  <main class="content" id="content" data-tab="home">
+
+    <!-- ============================= HOME ============================= -->
+    <section class="tab-page" id="home-view" data-view="home">
+
+      <!-- Spotify-style top fade: orange gradient that melts into the base -->
+      <div class="page-fade" aria-hidden="true"></div>
+
+      <div class="home-head">
+        <h1 class="home-greeting" id="home-greeting">Good morning</h1>
+      </div>
+
+      <!-- Sticky filter chips (All / Trending / For you / Browse) -->
+      <div class="home-chips" id="home-chips">
+        <button class="chip home-chip active" data-home-filter="all" type="button">All</button>
+        <button class="chip home-chip" data-home-filter="trending" type="button">Trending</button>
+        <button class="chip home-chip" data-home-filter="foryou" type="button">For you</button>
+        <button class="chip home-chip" data-home-filter="browse" type="button">Browse</button>
+      </div>
+
+      <!-- Recently Played — list rows like the search results -->
+      <section class="home-sec" id="recently" hidden>
+        <div class="section-head">
+          <h2 class="section-title">Recently Played</h2>
+        </div>
+        <div class="recent-list" id="recently-row"></div>
+      </section>
+
+      <!-- Made for You -->
+      <section class="home-sec" id="foryou" hidden>
+        <div class="section-head">
+          <h2 class="section-title">Made for You</h2>
+          <button class="btn ghost sm" id="foryou-reset" title="Back to recommendations based on your history" hidden>Reset</button>
+        </div>
+        <p class="section-sub" id="foryou-sub"></p>
+        <div class="hrow" id="foryou-row"></div>
+      </section>
+
+      <!-- Trending Now -->
+      <section class="home-sec" id="trending-sec" hidden>
+        <div class="section-head">
+          <h2 class="section-title">Trending Now</h2>
+        </div>
+        <p class="section-sub" id="trending-sub" hidden>What the internet is playing right now.</p>
+        <div class="hrow" id="trending-row"></div>
+      </section>
+
+      <!-- Hot This Week -->
+      <section class="home-sec" id="hot-sec" hidden>
+        <div class="section-head">
+          <h2 class="section-title">Hot This Week</h2>
+        </div>
+        <p class="section-sub" id="hot-sub" hidden>The worldwide chart.</p>
+        <div class="hrow" id="hot-row"></div>
+      </section>
+
+      <!-- PH Trending -->
+      <section class="home-sec" id="ph-sec" hidden>
+        <div class="section-head">
+          <h2 class="section-title">PH Trending</h2>
+        </div>
+        <p class="section-sub" id="ph-sub">What the Philippines is playing right now.</p>
+        <div class="hrow" id="ph-row"></div>
+      </section>
+
+      <!-- Albums -->
+      <section class="home-sec" id="albums-sec" hidden>
+        <div class="section-head">
+          <h2 class="section-title">Albums</h2>
+        </div>
+        <p class="section-sub" id="albums-sub">New and notable albums.</p>
+        <div class="hrow" id="albums-row"></div>
+      </section>
+
+      <!-- Artists (Browse) -->
+      <section class="home-sec" id="artists" hidden>
+        <h2 class="section-title">Artists</h2>
+        <p class="section-sub">Jump straight into the artists topping the chart.</p>
+        <div class="artists-row" id="artists-row"></div>
+      </section>
+
+      <!-- Moods (Browse) -->
+      <section class="moods-page" id="moods-page" hidden>
+        <h2 class="section-title">Moods</h2>
+        <p class="section-sub">Find your vibe.</p>
+        <div class="mood-grid" id="mood-grid"></div>
+        <div class="mood-results" id="mood-results" hidden>
+          <h2 class="section-title" id="mood-results-title"></h2>
+          <p class="section-sub" id="mood-results-sub"></p>
+          <div class="grid" id="mood-results-grid"></div>
+          <div class="empty small" id="mood-results-empty" hidden>
+            <p>No tracks found for this mood.</p>
+          </div>
+        </div>
+      </section>
+
+    </section>
+
+    <!-- ============================= SEARCH ============================= -->
+    <section class="tab-page search-view" id="search-view" data-view="search" hidden>
+      <h1 class="search-title">Search</h1>
+
+      <!-- Spotify's white pill search bar -->
+      <div class="search-bar" id="nav-search">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
+        <input type="search" id="search-input" placeholder="What do you want to listen to?" autocomplete="off" enterkeyhint="search" />
+        <button class="search-clear" id="search-clear" title="Clear search" aria-label="Clear search" hidden>
+          <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3 10.6 10.6 16.9 4.3z"/></svg>
+        </button>
+      </div>
+
+      <!-- Inline suggestions — the old floating dropdown is gone: fast text
+           suggestions + tappable song/playlist rows now live right in the
+           tab, below the search bar (recently played when idle, live hits
+           while typing). -->
+      <section class="history-row" id="history-row" hidden>
+        <span class="history-label" id="history-label">Recently played</span>
+        <div class="sugg-titles" id="history-titles"></div>
+        <div class="chips" id="history-chips"></div>
+      </section>
+
+      <!-- Search-mode playlist shelf -->
+      <div class="hrow playlists-shelf" id="search-playlists" hidden></div>
+
+      <!-- Results list (Search mode) -->
+      <div class="grid" id="grid" hidden></div>
+      <div class="empty" id="empty" hidden>
+        <p id="empty-text">Loading…</p>
+      </div>
+
+      <!-- More on <artist> — suggested albums + songs after the search
+           results, seeded from the top result's artist. -->
+      <section class="search-more" id="search-more" hidden>
+        <h3 class="search-more-title" id="search-more-title">More on …</h3>
+        <div class="hrow search-more-pl" id="search-more-pl"></div>
+        <div class="hrow search-more-songs" id="search-more-songs"></div>
+      </section>
+
+      <!-- Browse all (idle search, Spotify category grid) -->
+      <div class="search-browse" id="search-browse">
+        <h2 class="section-title">Browse all</h2>
+        <p class="section-sub">Pick a vibe — every genre, one tap away.</p>
+        <div class="browse-grid" id="browse-grid"></div>
+      </div>
+    </section>
+
+    <!-- ============================= YOUR LIBRARY ============================= -->
+    <section class="tab-page library-view" id="library-view" data-view="library" hidden>
+      <div class="lib-head">
+        <h1 class="lib-title">Your Library</h1>
+        <button class="lib-add" id="pl-open-btn" title="Create playlist" aria-label="Create playlist">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+        </button>
+      </div>
+
+      <!-- Filter chips (Playlists / Liked / Downloads) -->
+      <div class="lib-chips" id="library-chips">
+        <button class="chip home-chip active" data-lib-filter="playlists" type="button">Playlists</button>
+        <button class="chip home-chip" data-lib-filter="liked" type="button">Liked</button>
+        <button class="chip home-chip" data-lib-filter="downloads" type="button">Downloads</button>
+      </div>
+
+      <div class="empty small" id="library-empty" hidden>
+        <p>Nothing here yet.<br />Like or add any track to build your music.</p>
+      </div>
+
+      <div class="lib-wrap" id="lib-playlists-wrap">
+        <ul class="lib-list" id="playlists-list"></ul>
+      </div>
+      <div class="lib-wrap" id="lib-liked-wrap" hidden>
+        <ul class="lib-list" id="liked-list"></ul>
+      </div>
+      <div class="lib-wrap" id="lib-downloads-wrap" hidden>
+        <div class="lib-dl-head"><h3>Downloads</h3><span id="dl-summary"></span></div>
+        <ul class="lib-list" id="downloads-list"></ul>
+        <button class="btn ghost sm" id="dl-clear" hidden>Clear downloads</button>
+      </div>
+
+      <!-- Your name — shown in the Home greeting, editable here -->
+      <div class="lib-settings">
+        <h3>Your name</h3>
+        <p class="drawer-note">Shown in the Home greeting.</p>
+        <div class="drawer-actions" id="name-actions">
+          <input type="text" class="lib-name-input" id="lib-name-input" placeholder="Your name" maxlength="24" autocomplete="off" />
+          <button type="button" class="btn sm" id="lib-name-save">Save</button>
+        </div>
+      </div>
+
+      <!-- Install app — PWA install entry. Hidden once the app is already
+           installed (standalone). Chrome/Android shows a native install
+           prompt; iOS and other browsers get step-by-step instructions. -->
+      <div class="lib-settings" id="install-sec" hidden>
+        <h3>Install app</h3>
+        <p class="drawer-note">Put OrBeat on your Home Screen — fullscreen, just like a native app. No app store needed.</p>
+        <div class="drawer-actions">
+          <button type="button" class="btn sm" id="install-btn">Install app</button>
+          <span class="install-note" id="install-note"></span>
+        </div>
+      </div>
+
+      <span class="lib-badge" id="library-badge" hidden>0</span>
+    </section>
+
+  </main>
+
+  <!-- ============================= MINI PLAYER ============================= -->
+  <footer class="player" id="player" hidden>
+    <!-- The toast lives INSIDE the mini player: while shown (.toast-open) it
+         sits in the panel's grown top area; when the panel retracts, its top
+         edge eats the toast (overflow:hidden clips it) — no fade-out. -->
+    <div class="toast" id="toast" hidden></div>
+    <div class="mini-progress" id="mini-progress">
+      <div class="mini-progress-fill" id="mini-progress-fill"></div>
+    </div>
+    <!-- Mini-player peek: holding the mini player expands its top portion
+         and reveals the NEXT track live (cover, title/artist, equalizer +
+         low-volume audio preview). Release after the peek plays that track.
+         Grows out of the panel's top edge exactly like the toast. -->
+    <div class="mini-peek" id="mini-peek" aria-hidden="true" hidden>
+      <div class="np-peek-cover" id="mini-peek-cover"></div>
+      <div class="np-peek-info">
+        <div class="np-peek-label">Up next</div>
+        <div class="np-peek-title" id="mini-peek-title">—</div>
+        <div class="np-peek-artist" id="mini-peek-artist">—</div>
+      </div>
+      <div class="np-peek-live" aria-hidden="true"><span></span><span></span><span></span></div>
+    </div>
+    <div class="mini-row">
+      <img class="mini-cover" id="player-cover" alt="" />
+      <div class="mini-info" id="player-track" title="Open now playing view">
+        <div class="mini-title" id="player-title">—</div>
+        <div class="mini-artist" id="player-artist">—</div>
+      </div>
+      <button class="mini-like" id="mini-like" title="Like" aria-label="Like">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+      </button>
+      <button class="ctrl big" id="btn-play" title="Play / Pause" aria-label="Play / Pause">
+        <svg viewBox="0 0 24 24" width="22" height="22" id="play-icon">
+          <path fill="currentColor" d="M8 5v14l11-7z" id="play-path"/>
+        </svg>
+      </button>
+    </div>
+    <!-- Hidden inputs for the old IDs (JS references these) -->
+    <div class="seek-buffer" id="seek-buffer" hidden></div>
+    <input type="hidden" id="t-cur" value="0:00" />
+    <input type="hidden" id="t-total" value="0:00" />
+    <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Seek" hidden />
+    <input type="range" id="volume" min="0" max="100" value="80" aria-label="Volume" hidden />
+  </footer>
+
+  <!-- ============================= BOTTOM NAV ============================= -->
+  <nav class="bottom-nav" id="bottom-nav" aria-label="Navigation">
+    <button class="nav-tab active" data-tab="home" title="Home" aria-label="Home">
+      <svg class="ico-outline" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3.99 19.53 10.62 17.98 12.17 17.9 12.17 17.9 19.9 13.9 19.9 13.9 14.9 10.1 14.9 10.1 19.9 6.1 19.9 6.1 12.17 6.02 12.17 4.47 10.62 12 3.99z"/></svg>
+      <svg class="ico-filled" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3 2 12h3v8h6v-6h2v6h6v-8h3z"/></svg>
+      <span class="nav-label">Home</span>
+    </button>
+    <button class="nav-tab" data-tab="search" title="Search" aria-label="Search">
+      <svg class="ico-outline" viewBox="0 0 24 24"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
+      <svg class="ico-filled" viewBox="0 0 24 24"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      <span class="nav-label">Search</span>
+    </button>
+    <button class="nav-tab" data-tab="library" title="Your library" aria-label="Your library">
+      <svg class="ico-outline" viewBox="0 0 24 24"><path fill="currentColor" d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12zm-7.5-1a2.5 2.5 0 0 0 2.5-2.5V7h3V5h-4v5.51c-.42-.32-.93-.51-1.5-.51a2.5 2.5 0 0 0 0 5zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6z"/></svg>
+      <svg class="ico-filled" viewBox="0 0 24 24"><path fill="currentColor" d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 5h-3v5.5c0 1.38-1.12 2.5-2.5 2.5S10 13.88 10 12.5s1.12-2.5 2.5-2.5c.57 0 1.08.19 1.5.51V5h4v2zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6z"/></svg>
+      <span class="nav-label">Your Library</span>
+    </button>
+  </nav>
+
+  <!-- ============================= NOW PLAYING ============================= -->
+  <div class="np-backdrop" id="np-backdrop" hidden>
+    <!-- The backdrop is TRANSPARENT — the app (and nav tabs) behind the
+         expanded mini player box stay fully visible, like the mini player
+         itself expanding in place. -->
+    <div class="np" id="np" role="dialog" aria-modal="true" aria-label="Now playing">
+      <!-- The mini player's streaming line rides onto the expanded box's top
+           edge — one continuous window from mini player to Now Playing. -->
+      <div class="np-progress" aria-hidden="true"><div class="mini-progress-fill" id="np-progress-fill"></div></div>
+      <div class="np-glow" aria-hidden="true"></div>
+      <div class="np-close" id="np-close" title="Drag to close"></div>
+      <div class="np-context" id="np-context" aria-hidden="true">Now Playing</div>
+
+      <!-- .np-body wraps the IN-FLOW content (art, info, seek, controls,
+           queue, volume). During a close the BOX collapses while this body is
+           counter-scaled, so the content stays fixed on screen — only the
+           box frame comes down around it. Absolute overlays (np-flash,
+           np-ai) stay outside on purpose. -->
+      <div class="np-body" id="np-body">
+      <div class="np-art" id="np-art"></div>
+      <!-- Spotify-style info row: title/artist left, like button right. The
+           outer .np-info is a clip (overflow:hidden) — the .np-info-row inside
+           translates during drags/slides while the info-ghost (old title)
+           slides out at its edges, so a track change stays continuous. -->
+      <div class="np-info">
+        <div class="np-info-row">
+          <div class="np-info-text">
+            <div class="np-title" id="np-title">—</div>
+            <div class="np-artist" id="np-artist">—</div>
+          </div>
+          <button class="np-like" id="np-like" title="Like" aria-label="Like">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 21s-6.7-4.3-9.3-8.1C.9 10.2 1.6 6.8 4.4 5.4 6.6 4.2 9.1 5 10.6 6.8L12 8.3l1.4-1.5c1.5-1.8 4-2.6 6.2-1.4 2.8 1.4 3.5 4.8 1.7 7.5C18.7 16.7 12 21 12 21z"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="np-seek">
+        <span class="time" id="np-t-cur">0:00</span>
+        <div class="seek-wrap np-seek-wrap">
+          <div class="seek-buffer" id="np-seek-buffer"></div>
+          <div class="seek-fill" id="np-seek-fill"></div>
+          <input type="range" id="np-seek" min="0" max="1000" value="0" aria-label="Seek" />
+        </div>
+        <span class="time" id="np-t-total">0:00</span>
+      </div>
+      <!-- Streaming adaptation chip: shows the current stream tier and buffer
+           cushion so users can SEE the app adapting to their connection. -->
+      <div class="np-tier" id="np-tier" aria-hidden="true">
+        <span class="np-tier-dot" id="np-tier-dot"></span>
+        <span id="np-tier-text">Auto · High</span>
+      </div>
+      <div class="np-controls">
+        <button class="mode-btn np-mode" id="np-shuffle" title="Shuffle">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+        </button>
+        <button class="ctrl np-ctrl" id="np-prev" title="Previous">
+          <svg viewBox="0 0 24 24" width="32" height="32"><path fill="currentColor" d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+        </button>
+        <button class="ctrl np-play" id="np-play" title="Play / Pause">
+          <svg viewBox="0 0 24 24" width="32" height="32"><path fill="currentColor" d="M8 5v14l11-7z" id="np-play-path"/></svg>
+        </button>
+        <button class="ctrl np-ctrl" id="np-next" title="Next">
+          <svg viewBox="0 0 24 24" width="32" height="32"><path fill="currentColor" d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg>
+        </button>
+        <button class="mode-btn np-mode" id="np-repeat" title="Repeat">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+        </button>
+      </div>
+      <!-- About this song — replaces the old Up Next panel: the always-
+           visible song-info sheet (Wikipedia / Brain knowledge, no API keys
+           required). The header row (ORBEAT TRIVIA + Up Next) is a FIXED
+           row; only the description below it scrolls — it can never slide
+           under or overlap the header. The np-ai-scrolled class tells the
+           shared CSS the sheet itself must not scroll (the inner
+           .np-ai-scroll owns it). -->
+      <div class="np-ai np-ai-scrolled" id="np-ai">
+        <div class="np-ai-head">
+          <span class="np-ai-title"><span class="np-ai-o">OR</span><span class="np-ai-beat"><span class="np-ai-w">B</span><span class="np-ai-w">E</span><span class="np-ai-w">A</span><span class="np-ai-w">T</span></span><span class="np-ai-o">TRIVIA</span></span>
+          <!-- Up Next: bold label + list icon on the OPPOSITE side of the
+               OrBeat Trivia title (same header row, right edge). The whole
+               chip is tappable and opens the fullscreen Up Next (queue). -->
+          <button class="np-queue-btn np-queue-inline" id="np-queue-btn" title="Up Next" aria-label="Up Next">
+            <span class="np-queue-label">UP NEXT</span>
+            <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h12v2H3z"/></svg>
+          </button>
+        </div>
+        <div class="np-ai-scroll">
+          <div class="np-ai-body" id="np-ai-body">Loading…</div>
+          <div class="np-ai-src" id="np-ai-src"></div>
+          <!-- Orange chevron (V): expand the About sheet so the full
+               description is readable — the cover/title/controls push up to
+               make room. Tap the description (or the chevron, now ^) to
+               collapse back. -->
+          <button class="np-ai-more" id="np-ai-more" title="Read more" aria-label="Read more about this song">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 16.2 6 10.2l1.4-1.4L12 13.4l4.6-4.6L18 10.2z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Bottom fade starting exactly at the volume line's top edge: a soft
+           gradient melting the last line of the description into the glass,
+           telling the user there is MORE to read below. Pinned to the
+           panel's bottom (never scrolls with the sheet) and shown only while
+           the sheet actually overflows (.clipped, set by JS). -->
+      <div class="np-ai-fade" aria-hidden="true"></div>
+      <div class="np-vol-line">
+        <svg viewBox="0 0 24 24" width="15" height="15"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
+        <input type="range" id="np-volume" min="0" max="100" value="80" aria-label="Volume" />
+      </div>
+      </div><!-- /np-body -->
+      <!-- Subtle inline feedback for like/queue actions (replaces toasts while
+           this fullscreen view is open) — absolute overlay, lives on the box. -->
+      <div class="np-flash" id="np-flash" aria-live="polite" hidden></div>
+
+      <!-- The mini player INSIDE the box — the Now Playing and the mini player
+           are ONE connected box. Hidden (opacity 0) while the box is open;
+           as the box collapses this row is counter-scaled with the content
+           so it stays fixed at natural size and fills the box's 64px base —
+           the box literally becomes the mini player. Display-only here; the
+           real interactive bar (#player) sits underneath at the same
+           footprint and takes over seamlessly when the box closes. -->
+      <div class="mini-row np-mini" id="np-mini" aria-hidden="true">
+        <div class="mini-cover" id="np-mini-cover"></div>
+        <div class="mini-info">
+          <div class="mini-title" id="np-mini-title">—</div>
+          <div class="mini-artist" id="np-mini-artist">—</div>
+        </div>
+        <button class="mini-like" id="np-mini-like" title="Like" aria-label="Like">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        </button>
+        <button class="ctrl big" id="np-mini-play" title="Play / Pause" aria-label="Play / Pause">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M8 5v14l11-7z" id="np-mini-play-path"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= TRACK CONTEXT MENU (long-press) ============================= -->
+  <div class="ctx-backdrop" id="ctx-backdrop" hidden></div>
+  <div class="ctx-panel" id="ctx-panel" role="menu" aria-label="Track options" hidden>
+    <div class="ctx-title" id="ctx-title"></div>
+    <div class="ctx-list" id="ctx-list"></div>
+  </div>
+
+  <!-- ============================= ALBUM VIEW ============================= -->
+  <div class="np-backdrop" id="album-backdrop" hidden>
+    <!-- Close lives OUTSIDE the scroll container so it stays put while the
+         album list scrolls (absolute inside the view would scroll away). -->
+    <button class="np-close" id="album-close" title="Close" aria-label="Close album">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6.4 9.4 12 15l5.6-5.6-1.4-1.4L12 12.2 7.8 8z"/></svg>
+    </button>
+    <div class="np album-view" id="album-view" role="dialog" aria-modal="true" aria-label="Album">
+      <!-- Full-screen backdrop painted from the album art (Spotify-style) -->
+      <div class="album-glow" id="album-glow" aria-hidden="true"></div>
+      <img class="view-logo" src="./logo.png" alt="OrBeat" />
+      <div class="album-head">
+        <div class="album-art" id="album-art"></div>
+        <div class="album-meta">
+          <span class="np-source">Album</span>
+          <div class="album-name" id="album-name">—</div>
+          <div class="album-artist" id="album-artist">—</div>
+          <div class="album-meta2" id="album-meta2"></div>
+        </div>
+      </div>
+      <!-- Spotify-style action row: add-to-playlist + download are FLAT
+           icons at the LEFT corner, the orange play circle at the right. -->
+      <div class="album-actions">
+        <div class="album-acts">
+          <button class="album-act" id="album-add-pl" title="Add to playlist" aria-label="Add album to playlist">
+            <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+          </button>
+          <button class="album-act" id="album-dl" title="Download album" aria-label="Download album">
+            <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 16l-5-5 1.4-1.4 2.6 2.6V3h2v9.2l2.6-2.6L17 11l-5 5zM5 19h14v2H5z"/></svg>
+          </button>
+        </div>
+        <button class="album-play-all" id="album-play-all" title="Play album" aria-label="Play album">
+          <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+        </button>
+      </div>
+      <div class="album-tracks" id="album-tracks">
+        <div class="row-loading">Loading tracks…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= PLAYLIST VIEW ============================= -->
+  <div class="np-backdrop" id="plv-backdrop" hidden>
+    <button class="np-close" id="plv-close" title="Close" aria-label="Close playlist">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6.4 9.4 12 15l5.6-5.6-1.4-1.4L12 12.2 7.8 8z"/></svg>
+    </button>
+    <div class="np plv-view" id="plv-view" role="dialog" aria-modal="true" aria-label="Playlist">
+      <!-- Backdrop painted from the playlist's cover (first track's art) -->
+      <div class="album-glow" id="plv-glow" aria-hidden="true"></div>
+      <img class="view-logo" src="./logo.png" alt="OrBeat" />
+      <div class="album-head">
+        <div class="album-art" id="plv-art"></div>
+        <div class="album-meta">
+          <span class="np-source">OrBeat Playlist</span>
+          <div class="album-name" id="plv-name">—</div>
+          <div class="album-meta2" id="plv-meta2"></div>
+        </div>
+      </div>
+      <div class="album-actions">
+        <div class="album-acts">
+          <button class="album-act" id="plv-add-pl" title="Add to playlist" aria-label="Add playlist to playlist">
+            <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+          </button>
+          <button class="album-act" id="plv-dl" title="Download playlist" aria-label="Download playlist">
+            <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 16l-5-5 1.4-1.4 2.6 2.6V3h2v9.2l2.6-2.6L17 11l-5 5zM5 19h14v2H5z"/></svg>
+          </button>
+        </div>
+        <button class="album-play-all" id="plv-play-all" title="Play playlist" aria-label="Play playlist">
+          <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+        </button>
+      </div>
+      <div class="album-tracks" id="plv-tracks"></div>
+    </div>
+  </div>
+
+  <!-- ============================= GENRE PAGE ============================= -->
+  <div class="np-backdrop" id="genre-backdrop" hidden>
+    <button class="np-close" id="genre-close" title="Close" aria-label="Close genre">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6.4 9.4 12 15l5.6-5.6-1.4-1.4L12 12.2 7.8 8z"/></svg>
+    </button>
+    <div class="np genre-view" id="genre-view" role="dialog" aria-modal="true" aria-label="Genre">
+      <!-- Genre-tinted top fade that melts into the base, like the Home header -->
+      <div class="genre-banner" id="genre-banner" aria-hidden="true"></div>
+      <div class="genre-head">
+        <h2 class="section-title" id="genre-title">—</h2>
+        <p class="section-sub" id="genre-sub">Loading…</p>
+      </div>
+      <!-- 2-column playlists grid + a song list, Spotify-Browse style -->
+      <div class="genre-pl-sec" id="genre-pl-sec">
+        <h3 class="genre-sec-title">Playlists</h3>
+        <div class="genre-pl-grid" id="genre-playlists"></div>
+      </div>
+      <div class="genre-songs-sec" id="genre-songs-sec">
+        <h3 class="genre-sec-title">Songs</h3>
+        <div class="genre-tracks" id="genre-tracks"></div>
+      </div>
+      <div class="empty small" id="genre-empty" hidden>
+        <p id="genre-empty-text">No tracks found for this genre.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= QUEUE PANEL ============================= -->
+  <div class="np-backdrop" id="queue-backdrop" hidden>
+    <div class="np queue-view" id="queue-panel" role="dialog" aria-modal="true" aria-label="Queue">
+      <button class="np-close-x" id="queue-close" title="Close" aria-label="Close queue">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>
+      </button>
+      <!-- Fullscreen backdrop painted from the current track's art (Spotify-style) -->
+      <div class="queue-glow" id="queue-glow" aria-hidden="true"></div>
+      <div class="queue-title-row">
+        <h2 class="queue-title">Up Next</h2>
+        <span class="queue-count" id="queue-count"></span>
+      </div>
+      <div class="queue-now-label">Now Playing</div>
+      <div class="queue-list queue-now-list" id="queue-now"></div>
+      <div class="queue-up-label" id="queue-up-label" hidden>Next Up</div>
+      <div class="queue-list queue-up-list" id="queue-up"></div>
+      <div class="queue-empty" id="queue-empty" hidden>Nothing in the queue.<br>Play a song to get started.</div>
+    </div>
+  </div>
+
+  <!-- ============================= SLEEP TIMER ============================= -->
+  <div class="sheet-panel sleep-panel" id="sleep-panel" hidden>
+    <div class="sheet-handle"></div>
+    <div class="sleep-title">Sleep Timer</div>
+    <div class="sleep-options">
+      <button class="sleep-opt" data-minutes="15">15 minutes</button>
+      <button class="sleep-opt" data-minutes="30">30 minutes</button>
+      <button class="sleep-opt" data-minutes="45">45 minutes</button>
+      <button class="sleep-opt" data-minutes="60">1 hour</button>
+      <button class="sleep-opt" data-minutes="90">1.5 hours</button>
+      <button class="sleep-opt" data-minutes="-1">Off</button>
+    </div>
+    <div class="sleep-countdown" id="sleep-countdown" hidden></div>
+  </div>
+
+  <!-- ============================= CREATE PLAYLIST SHEET ============================= -->
+  <div class="sheet-backdrop" id="pl-sheet-backdrop" hidden></div>
+  <div class="sheet-panel pl-sheet" id="pl-sheet" hidden>
+    <div class="sheet-handle"></div>
+    <h3 class="pl-sheet-title">Create playlist</h3>
+    <input type="text" id="pl-name" placeholder="Name your playlist…" maxlength="40" />
+    <button class="btn primary block" id="pl-create-btn">Create</button>
+  </div>
+
+  <!-- ============================= INSTALL APP SHEET ============================= -->
+  <div class="sheet-backdrop" id="install-backdrop" hidden></div>
+  <div class="sheet-panel install-sheet" id="install-sheet" hidden>
+    <div class="sheet-handle"></div>
+    <h3 class="pl-sheet-title">Install OrBeat</h3>
+    <div class="install-steps" id="install-steps"></div>
+    <button class="btn primary block" id="install-done">Done</button>
+  </div>
+
+  <!-- Placeholder element (id contract — the Spotify layout has no top bar) -->
+  <div class="np-topbar" id="np-topbar" hidden></div>
+
+  <!-- Scripts are loaded by the self-update bootstrap in <head>. -->
 </body>
 </html>

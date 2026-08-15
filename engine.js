@@ -1,4 +1,4 @@
-/* Natsirt Mobile — engine.js
+/* OrBeat Mobile — engine.js
  *
  * The client-side music engine. No server on the phone, no API keys.
  *
@@ -274,10 +274,15 @@ window.MusicEngine = (() => {
     }
   } catch { /* ignore */ }
 
+  // Stream-cache keys are TIER-tagged (videoId#tier): the same video resolves
+  // to a different URL per quality tier, and a tier switch must never reuse a
+  // cached URL from another tier.
+  const streamCacheKey = (videoId) => `${videoId}#${streamTier()}`;
   function streamCacheGet(videoId) {
-    const hit = streamCache[videoId];
+    const k = streamCacheKey(videoId);
+    const hit = streamCache[k];
     if (hit && hit.exp > Date.now()) return hit.out;
-    delete streamCache[videoId];
+    delete streamCache[k];
     return null;
   }
   function streamCacheSet(videoId, out) {
@@ -285,7 +290,7 @@ window.MusicEngine = (() => {
     // IP and are re-resolved per process anyway — a stale one across restarts
     // is only a liability.
     if (out && out.viaRelay && /127\.0\.0\.1|localhost/.test(out.relay || '')) return;
-    streamCache[videoId] = { out, exp: Date.now() + STREAM_TTL };
+    streamCache[streamCacheKey(videoId)] = { out, exp: Date.now() + STREAM_TTL };
     try {
       // Prune stale entries while we're here (keeps the key small).
       const now = Date.now();
@@ -294,8 +299,9 @@ window.MusicEngine = (() => {
     } catch { /* quota/private-mode — the cache is best-effort */ }
   }
   function streamCacheDel(videoId) {
-    if (!streamCache[videoId]) return;
-    delete streamCache[videoId];
+    const k = streamCacheKey(videoId);
+    if (!streamCache[k]) return;
+    delete streamCache[k];
     try { localStorage.setItem('natsirt_stream_cache', JSON.stringify(streamCache)); } catch { /* ignore */ }
   }
 
@@ -441,11 +447,21 @@ window.MusicEngine = (() => {
 
   const thumb = (videoId) => `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
+  // Plain YouTube playlist rows carry "Channel • 2.3M views" (or
+  // "Shakira and 2 more") as their byline — strip that junk so the artist
+  // is the real name, never a channel name or view count.
+  function cleanArtist(a) {
+    return String(a || '')
+      .replace(/\s*•\s*[\d.,]+[KMB]?\s*views?$/i, '')  // "Channel • 2.3M views" → "Channel"
+      .replace(/\s+and\s+\d+\s+more$/i, '')            // "Shakira and 2 more" → "Shakira"
+      .trim();
+  }
+
   function toTrack(videoId, name, artist, duration) {
     return {
       id: `yt:${videoId}`,
       name: String(name || 'Untitled').trim(),
-      artist: String(artist || 'Unknown artist').trim(),
+      artist: cleanArtist(artist) || 'Unknown artist',
       album: '',
       duration: Number(duration) || 0,
       cover: thumb(videoId),
@@ -571,17 +587,178 @@ window.MusicEngine = (() => {
     return [...seen.values()];
   }
 
-  // High-quality first: the player streams a strict short lookahead buffer
-  // (10-15s of byte ranges via MSE), so startup no longer trades quality for
-  // speed — prefer the richest audio the video offers. 141 = 256kbps AAC,
-  // 251 = 160kbps opus, 140 = 128kbps AAC; the low formats (139/249/250)
-  // remain as last-resort fallbacks for videos that only offer them.
-  // Audio-only only — never muxed video+audio.
-  const ITAG_PREF = [141, 251, 140, 250, 249, 599, 600, 139];
+  // Streaming quality tiers — the same itag sets the relays use. Every tier
+  // is audio-only (never muxed video+audio); they trade audio size against
+  // resilience: 141 = 256kbps AAC, 251 = 160kbps opus, 140 = 128kbps AAC
+  // (great quality at HALF the size of 141), 139/249 = ~48kbps opus
+  // (smallest — plays smoothly on the weakest connections).
+  const ITAG_HIGH = [141, 251, 140, 250, 249, 599, 600, 139];
+  const ITAG_STANDARD = [140, 251, 141, 250, 249, 599, 600, 139];
+  const ITAG_LOW = [139, 249, 250, 599, 600, 140, 251, 141];
+  const QUALITY_ITAGS = { high: ITAG_HIGH, standard: ITAG_STANDARD, low: ITAG_LOW };
+  const QUALITY_KEY = 'natsirt_stream_quality';
+  const QUALITY_OPTIONS = ['auto', 'high', 'standard', 'low'];
+  const TIER_ORDER = ['high', 'standard', 'low'];
+
+  // 'auto' (default) adapts to the LIVE connection: the tier starts from the
+  // connection's effectiveType and steps down (or back up) from the real
+  // download speeds measured during playback, so a weak network gets a
+  // smaller stream it can actually keep up with. Manual tiers pin the format
+  // choice. Everything quality-dependent — the relay URL (&q=), the stream
+  // caches and the MSE buffer windows — keys off streamTier(), so changing
+  // the setting takes effect on the next track.
+  // TIER_ORDER index is high=0 → standard=1 → low=2: stepping DOWN means a
+  // HIGHER index (smaller stream), stepping up a lower one.
+  let autoIdx = -1;          // resolved tier index in auto mode; -1 = follow the base
+  let speedEstimate = 0;     // bytes/sec, EWMA of MSE chunk downloads (auto mode)
+  let speedFirstAt = 0;      // when measurement began (auto tier waits for samples)
+  let lastTierStep = 0;      // last time the auto tier stepped, for hysteresis
+
+  function qualitySetting() {
+    try {
+      const v = localStorage.getItem(QUALITY_KEY);
+      return QUALITY_OPTIONS.includes(v) ? v : 'auto';
+    } catch { return 'auto'; }
+  }
+
+  function setStreamQuality(q) {
+    const v = QUALITY_OPTIONS.includes(q) ? q : 'auto';
+    try { localStorage.setItem(QUALITY_KEY, v); } catch { /* ignore */ }
+    autoIdx = -1; // back to following the connection's base tier
+    speedEstimate = 0;
+    speedFirstAt = 0;
+    lastTierStep = 0;
+    truncCount = 0;
+    truncWindowStart = 0;
+    truncCushion = 0;
+    dropStreamCaches(); // the old tier's cached URLs are stale now
+    return v;
+  }
+
+  // The connection's base tier from effectiveType (WebViews expose it when
+  // available; unknown → high, the app's previous default).
+  function connectionTier() {
+    try {
+      const c = navigator.connection;
+      const et = c && c.effectiveType;
+      if (et === 'slow-2g' || et === '2g') return 'low';
+      if (et === '3g') return 'standard';
+    } catch { /* ignore */ }
+    return 'high';
+  }
+
+  // The effective tier used by the player and relays right now.
+  function streamTier() {
+    const q = qualitySetting();
+    if (q !== 'auto') return q;
+    if (autoIdx >= 0) return TIER_ORDER[Math.max(0, Math.min(TIER_ORDER.length - 1, autoIdx))];
+    const base = TIER_ORDER.indexOf(connectionTier());
+    return TIER_ORDER[Math.max(0, Math.min(TIER_ORDER.length - 1, base))];
+  }
+
+  // Where auto mode is right now: the resolved index, or the base if it has
+  // never stepped (autoIdx === -1). Stepping DOWN (slower) increments it,
+  // stepping UP (faster) decrements it.
+  function autoCurrentIdx() {
+    return autoIdx >= 0 ? autoIdx : TIER_ORDER.indexOf(connectionTier());
+  }
+
+  // Sustained download speed the current tier needs to keep the buffer ahead
+  // (~2x the format's bitrate, so a network dip can't drain it mid-chunk).
+  function tierMinSpeed() {
+    const bps = { high: 262000, standard: 130000, low: 50000 }[streamTier()];
+    return bps * 1.8;
+  }
+
+  // Feed real chunk-download speeds from the MSE player. In auto mode this
+  // drives the tier: consistently too slow → step DOWN to a smaller stream
+  // (never tears down the playing track — the next resolution picks it up),
+  // plenty of headroom for a long while → step back up. The EWMA smooths
+  // single-chunk blips; both steps need sustained evidence.
+  function noteChunkSpeed(bps) {
+    if (qualitySetting() !== 'auto' || !(bps > 0)) return;
+    const now = Date.now();
+    speedEstimate = speedEstimate === 0 ? bps : speedEstimate * 0.7 + bps * 0.3;
+    if (!speedFirstAt) speedFirstAt = now;
+    // Ignore the first ~8s of samples — tiers must not flip on a cold start.
+    if (now - speedFirstAt < 8000) return;
+    const need = tierMinSpeed();
+    const cur = autoCurrentIdx();
+    // The FIRST step-down may fire right after the warm-up (react fast to a
+    // genuinely weak connection — the larger buffer absorbs it); later steps
+    // need 20s of hysteresis so the tier never oscillates. Step-up always
+    // requires 90s+ of sustained headroom.
+    if (cur < TIER_ORDER.length - 1 && speedEstimate < need * 0.7 && (lastTierStep === 0 || now - lastTierStep > 20000)) {
+      autoIdx = cur + 1; // step DOWN to a smaller stream
+      lastTierStep = now;
+      speedEstimate = 0; // re-measure at the new tier
+      dropStreamCaches();
+    } else if (cur > 0 && speedEstimate > need * 2.5 && now - lastTierStep > 90000) {
+      autoIdx = cur - 1; // plenty of headroom — step back UP
+      lastTierStep = now;
+      speedEstimate = 0;
+      dropStreamCaches();
+    }
+  }
+
+  // --- truncation-driven stepping ------------------------------------
+  // A SHORT chunk (the CDN/relay cut mid-body — detected by the MSE player
+  // when a chunk body is smaller than the requested range) is a stronger
+  // signal than slow speed: the connection isn't keeping the current stream
+  // alive. Repeated cuts step the tier DOWN so the next session gets a
+  // smaller stream AND the more forgiving MSE buffer window (larger chunks,
+  // earlier refill, deeper lookahead). Works in every quality mode:
+  //   • auto — steps the resolved quality tier down (like slow speed).
+  //   • manual — the user's pinned quality is respected, but the buffer
+  //     window still widens via the truncation cushion (mseCfg applies it).
+  let truncCount = 0;        // short chunks inside the current window
+  let truncWindowStart = 0;  // when the current window began
+  let truncCushion = 0;      // 0..2 — extra forgiving steps for the buffer
+
+  function noteChunkTruncation() {
+    const now = Date.now();
+    if (!truncWindowStart) truncWindowStart = now;
+    // Rolling 20s window: 2 cuts inside it is a pattern, not a blip.
+    if (now - truncWindowStart > 20000) { truncCount = 0; truncWindowStart = now; }
+    truncCount++;
+    if (truncCount < 2) return;
+    truncCount = 0;
+    truncWindowStart = now;
+    // Auto mode: step the quality tier down (same hysteresis as speed).
+    if (qualitySetting() === 'auto') {
+      const cur = autoCurrentIdx();
+      if (cur < TIER_ORDER.length - 1 && (lastTierStep === 0 || now - lastTierStep > 20000)) {
+        autoIdx = cur + 1; // step DOWN to a smaller stream
+        lastTierStep = now;
+        speedEstimate = 0;
+        dropStreamCaches();
+      }
+    }
+    // Always widen the buffer window for the next MSE session (the player
+    // calls mseCfg() on every fresh session, so the cushion takes effect on
+    // the next track — and the current session bumps its own config in
+    // mseFetchChunk, so this track heals too).
+    truncCushion = Math.min(2, truncCushion + 1);
+  }
+
+  function truncationCushion() { return truncCushion; }
+
+  // Drop every cached/pending stream resolution so the next streamUrl uses
+  // the current tier (cache keys are tier-tagged). Pending once() promises
+  // are swept too — an in-flight resolution from the OLD tier must never be
+  // handed to a new-tier caller.
+  function dropStreamCaches() {
+    for (const k of memo.keys()) if (k.startsWith('p:')) memo.delete(k);
+    for (const k of pending.keys()) if (k.startsWith('p:')) pending.delete(k);
+    streamCache = {};
+    try { localStorage.setItem('natsirt_stream_cache', JSON.stringify(streamCache)); } catch { /* ignore */ }
+  }
+
   function pickAudioFormat(adaptiveFormats) {
     const audio = (adaptiveFormats || []).filter((f) => f.url && f.mimeType && f.mimeType.startsWith('audio/'));
     if (!audio.length) return null;
-    for (const itag of ITAG_PREF) {
+    const pref = QUALITY_ITAGS[streamTier()] || ITAG_HIGH;
+    for (const itag of pref) {
       const hit = audio.find((f) => Number(f.itag) === itag);
       if (hit) return hit;
     }
@@ -1261,6 +1438,20 @@ window.MusicEngine = (() => {
     return [...seen.values()].filter((t) => t.name && t.name !== 'Untitled');
   }
 
+  // Pull the next-page continuation token out of a browse response
+  // (continuationContents.<shelf>Continuation.continuations[0].nextContinuationData).
+  function findContinuation(data) {
+    let out = null;
+    walk(data, (o) => {
+      if (out || !o || typeof o !== 'object') return;
+      const nd = o.nextContinuationData || o.reloadContinuationData;
+      if (nd && typeof nd.continuation === 'string') {
+        out = { token: nd.continuation, ctp: nd.clickTrackingParams || '' };
+      }
+    });
+    return out;
+  }
+
   async function albumTracks(artist, browseId) {
     const id = String(browseId || '').trim();
     const artistQ = String(artist || '').trim();
@@ -1274,18 +1465,43 @@ window.MusicEngine = (() => {
       // 500 with the ANDROID client — the relays and the direct fallback both
       // browse them via WEB_REMIX.
       if (id) {
+        let relayTracks = [];
         try {
           if (RELAYS.length) {
             try {
-              const data = await withRelays((relay) => getJson(`${relay}/chart?browseId=${encodeURIComponent(id)}&limit=50`, { timeout: 10000 }));
-              tracks = data.tracks || [];
+              // Ask for up to 500 — upgraded relays paginate to deliver the
+              // FULL album/playlist; older ones still cap at 50 (the direct
+              // paginated fetch below fills the gap).
+              const data = await withRelays((relay) => getJson(`${relay}/chart?browseId=${encodeURIComponent(id)}&limit=500`, { timeout: 10000 }));
+              relayTracks = data.tracks || [];
             } catch { /* fall through */ }
           }
-          if (!tracks.length) {
-            const data = await innertubePost(`${YT}/browse`, { browseId: id }, CLIENT_WEB_REMIX);
-            tracks = parseAlbumTracks(data).slice(0, 50);
-          }
-        } catch { /* fall through to artist search */ }
+        } catch { /* fall through to direct browse */ }
+        tracks = relayTracks.slice();
+        // The relay caps every browse at 50 tracks. A result in the 8-49 range
+        // is a complete album (fast path — no extra fetch). But 50+ (or a tiny
+        // failed result) means the real album/playlist may be longer: fetch the
+        // FULL list directly and follow every continuation page, so the app
+        // shows exactly what YouTube Music has (not just the first 50). The
+        // direct list (canonical album order) wins; relay-only tracks fill gaps.
+        if (relayTracks.length >= 50 || relayTracks.length < 8) {
+          try {
+            let data = await innertubePost(`${YT}/browse`, { browseId: id }, CLIENT_WEB_REMIX);
+            const direct = parseAlbumTracks(data);
+            for (let page = 0; page < 12 && direct.length < 400; page++) {
+              const cont = findContinuation(data);
+              if (!cont) break;
+              data = await innertubePost(`${YT}/browse`, { continuation: cont.token, clickTrackingParams: cont.ctp }, CLIENT_WEB_REMIX);
+              const more = parseAlbumTracks(data);
+              if (!more.length) break;
+              direct.push(...more);
+            }
+            if (direct.length) {
+              const seenIds = new Set();
+              tracks = direct.concat(relayTracks).filter((t) => (seenIds.has(t.id) ? false : (seenIds.add(t.id), true)));
+            }
+          } catch { /* keep the relay result */ }
+        }
       }
       // Fallback for pseudo-albums / failed browses: search the artist name
       // for more tracks (versions like karaoke/cover are stripped).
@@ -1332,10 +1548,10 @@ window.MusicEngine = (() => {
       if (!title) return;
       // col1 reads "Playlist • Creator • N songs" — pull the creator name.
       const sub = runsText(col(1));
-      let artist = sub.replace(/^Playlist\s*•\s*/i, '').replace(/\s*•\s*[\d,]+\s*songs?\s*$/i, '').trim() || 'Natsirt Music';
+      let artist = sub.replace(/^Playlist\s*•\s*/i, '').replace(/\s*•\s*[\d,]+\s*songs?\s*$/i, '').trim() || 'OrBeat Music';
       // YouTube Music's own playlists surface the platform as the creator —
       // show our own brand instead.
-      if (/^youtube\s*music$/i.test(artist)) artist = 'Natsirt Music';
+      if (/^youtube\s*music$/i.test(artist)) artist = 'OrBeat Music';
       let cover = '';
       const thumb = m.thumbnail && m.thumbnail.musicThumbnailRenderer && m.thumbnail.musicThumbnailRenderer.thumbnail;
       if (thumb && thumb.thumbnails && thumb.thumbnails.length) cover = thumb.thumbnails[thumb.thumbnails.length - 1].url;
@@ -1383,8 +1599,10 @@ window.MusicEngine = (() => {
     const id = String(videoId || '').trim();
     if (!/^[A-Za-z0-9_-]{5,}$/.test(id)) throw new Error('Invalid video id');
     return once(`p:${id}`, async () => {
+      const tier = streamTier(); // captured once per resolution
+      const pkey = `p:${id}#${tier}`;
       try {
-        const cached = memoGet(`p:${id}`, 3 * 60 * 60 * 1000)
+        const cached = memoGet(pkey, 3 * 60 * 60 * 1000)
           || streamCacheGet(id); // a resolution that survived an app restart
         // A cached relay URL is only usable while that relay is still healthy
         // AND is the relay this app would pick RIGHT NOW. Relay URLs are cheap
@@ -1410,7 +1628,9 @@ window.MusicEngine = (() => {
         let out = null;
         if (RELAYS.some(relayHealthy)) {
           const relay = preferredRelay();
-          out = { url: `${relay}/stream?videoId=${encodeURIComponent(id)}`, videoId: id, viaRelay: true, relay };
+          // &q= tells the relay which quality tier to resolve (see the relay
+          // sources: on-device Java relay, CF worker, PC yt-dlp relay).
+          out = { url: `${relay}/stream?videoId=${encodeURIComponent(id)}&q=${tier}`, videoId: id, viaRelay: true, relay };
         } else {
           const url = await firstSuccess([
             () => pipedStreamUrl(id),
@@ -1418,7 +1638,7 @@ window.MusicEngine = (() => {
           ]);
           out = { url, videoId: id };
         }
-        memoSet(`p:${id}`, out, 3 * 60 * 60 * 1000);
+        memoSet(pkey, out, 3 * 60 * 60 * 1000);
         streamCacheSet(id, out); // survive restarts
         return out;
       } catch (e) {
@@ -1437,8 +1657,12 @@ window.MusicEngine = (() => {
   // down on the first miss would push playback onto the bot-blocked on-device
   // relay for the whole cooldown — the exact stall we're avoiding.
   function reportStreamFailure(videoId, opts = {}) {
-    const key = `p:${videoId}`;
-    const cached = memo.get(key);
+    // Drop every tier variant of this video (the failure is video-specific).
+    let key = null;
+    for (const k of memo.keys()) {
+      if (k === `p:${videoId}` || k.startsWith(`p:${videoId}#`)) { key = k; break; }
+    }
+    const cached = key ? memo.get(key) : undefined;
     if (opts.markDown && cached && cached.value && cached.value.viaRelay) {
       // A single bad video must NOT take the on-device relay out of rotation:
       // that's this phone's own server (the primary, PC-off path), and a track
@@ -1450,15 +1674,15 @@ window.MusicEngine = (() => {
         markRelayDown(cached.value.relay, { short: true });
       }
     }
-    memo.delete(key);
-    pending.delete(key);
+    for (const k of memo.keys()) if (k === `p:${videoId}` || k.startsWith(`p:${videoId}#`)) memo.delete(k);
+    pending.delete(`p:${videoId}`);
     streamCacheDel(videoId);
   }
 
   // Drop any cached/pending resolution for a video so the next play re-resolves
   // a fresh URL (signed YouTube URLs expire; a stale one can't be replayed).
   function invalidateStream(videoId) {
-    memo.delete(`p:${videoId}`);
+    for (const k of memo.keys()) if (k === `p:${videoId}` || k.startsWith(`p:${videoId}#`)) memo.delete(k);
     pending.delete(`p:${videoId}`);
     streamCacheDel(videoId);
   }
@@ -1466,12 +1690,14 @@ window.MusicEngine = (() => {
   function warm(videoId) {
     streamUrl(videoId).catch(() => {});
     // Also ask the relay to pre-resolve the stream URL so the next /stream
-    // request starts instantly instead of resolving on first tap. Paced like
-    // every other YouTube-facing call — a /warm triggers a player resolve on
-    // the relay's side, so it must not fire unthrottled during the startup
-    // burst (the trending rows used to warm ~9 tracks at once).
+    // request starts instantly instead of resolving on first tap. The tier is
+    // passed so the warm fills the SAME cache key the upcoming play reads
+    // (relay caches are tier-tagged — a tier-less warm would be wasted work).
+    // Paced like every other YouTube-facing call — a /warm triggers a player
+    // resolve on the relay's side, so it must not fire unthrottled during the
+    // startup burst (the trending rows used to warm ~9 tracks at once).
     if (RELAYS.some(relayHealthy)) {
-      paced(() => fetchT(`${preferredRelay()}/warm?videoId=${encodeURIComponent(videoId)}`, { credentials: 'omit' }, 8000)).catch(() => {});
+      paced(() => fetchT(`${preferredRelay()}/warm?videoId=${encodeURIComponent(videoId)}&q=${streamTier()}`, { credentials: 'omit' }, 8000)).catch(() => {});
     }
   }
 
@@ -1547,6 +1773,12 @@ window.MusicEngine = (() => {
     validateRelays,
     reportStreamFailure,
     invalidateStream,
+    streamTier,
+    qualitySetting,
+    setStreamQuality,
+    noteChunkSpeed,
+    noteChunkTruncation,
+    truncationCushion,
     trending,
     hotThisWeek,
     phTrending,
