@@ -28,6 +28,20 @@ window.MusicEngine = (() => {
   // they just aren't baked in anymore.
   const RELAY_BAKED = 'http://127.0.0.1:8787';
 
+  // Cloudflare Worker relay (relay/worker.js) — the browser/iOS path. The
+  // Android APK carries its own loopback relay; a browser or PWA (iPhone,
+  // iPad, desktop) has no loopback server, so this Worker is the baked-in
+  // relay there. It reliably serves search/chart (server-side calls have no
+  // Origin header, so YouTube's browser bot-check never triggers) and its
+  // /stream is a best-effort audio source — YouTube bot-checks the player
+  // API for SOME datacenter egress IPs, and a blocked stream falls back to
+  // Piped automatically via reportStreamFailure. Deploy relay/worker.js
+  // (dash.cloudflare.com → Workers & Pages → Create Worker → paste → Save
+  // and deploy), then paste the https://<name>.workers.dev URL here and
+  // rebuild. A placeholder (contains __YOUR_) is treated as unset.
+  const RELAY_WORKER = 'https://__YOUR_WORKER__.workers.dev';
+  const workerConfigured = () => !RELAY_WORKER.includes('__YOUR_');
+
 
   // Public Piped instances, tried in order and rotated past on failure.
   // These are volunteer-run and flaky (search usually works, audio /streams
@@ -107,6 +121,25 @@ window.MusicEngine = (() => {
   let RELAYS = [];
   const relayHealth = new Map(); // url -> { fails, downUntil, lastGood }
 
+  // Pure ordering for the baked relay defaults (testable via __test).
+  //   • The on-device loopback relay always comes FIRST when present — it's
+  //     the Android APK's own server.
+  //   • The Cloudflare Worker (worker) sits right behind it in the Android
+  //     app and is the FIRST baked relay in a browser/PWA, where no loopback
+  //     server exists.
+  //   • User-saved relays (from setRelays / saved list) follow the baked
+  //     defaults; duplicates collapse.
+  function orderBaked(list, worker) {
+    const out = [...new Set(list)];
+    if (RELAY_BAKED && !out.includes(RELAY_BAKED)) out.unshift(RELAY_BAKED);
+    if (worker && !out.includes(worker)) {
+      const at = out.indexOf(RELAY_BAKED);
+      if (at >= 0) out.splice(at + 1, 0, worker);
+      else out.unshift(worker);
+    }
+    return out;
+  }
+
   function loadRelays() {
     const list = [];
     try {
@@ -122,8 +155,7 @@ window.MusicEngine = (() => {
       const legacy = localStorage.getItem('natsirt_relay');
       if (legacy && /^https?:\/\//.test(legacy.trim())) list.push(legacy.trim().replace(/\/+$/, ''));
     } catch { /* ignore */ }
-    if (RELAY_BAKED && !list.includes(RELAY_BAKED)) list.unshift(RELAY_BAKED);
-    RELAYS = [...new Set(list)];
+    RELAYS = orderBaked(list, workerConfigured() ? RELAY_WORKER : '');
   }
   loadRelays();
 
@@ -214,12 +246,13 @@ window.MusicEngine = (() => {
 
   // The relay whose stream endpoint the <audio> element should follow.
   // The on-device relay (loopback) is always preferred when healthy — it
-  // resolves from this phone's own IP with zero external dependencies, and now
-  // streams full tracks reliably (curl fallback for the bot-check; strictly
-  // audio-only — no video formats ever). Failing that, the PC relays
-  // (http:// — LAN or Tailscale, both backed by yt-dlp) are next; the
-  // Cloudflare Worker (https://) handles search/chart but its /stream is
-  // datacenter-bot-blocked, so it's never used for audio.
+  // resolves from this phone's own IP with zero external dependencies. Next
+  // come the PC relays (http:// — LAN or Tailscale, backed by yt-dlp). In a
+  // browser/PWA there is no loopback or LAN relay, so the Cloudflare Worker
+  // (https://) is used as the streaming relay — its /stream can be
+  // bot-blocked on flagged datacenter egress IPs, and a blocked stream trips
+  // reportStreamFailure → short backoff → the Piped fallback, so it never
+  // hard-stalls a track.
   function preferredRelay() {
     const healthy = RELAYS.filter(relayHealthy);
     if (!healthy.length) return RELAYS[0] || '';
@@ -229,8 +262,11 @@ window.MusicEngine = (() => {
     // Then the PC relays (LAN or Tailscale).
     const lan = healthy.filter((u) => /^http:\/\//.test(u) && !/127\.0\.0\.1|localhost/.test(u));
     if (lan.length) return lan[(rrIdx = (rrIdx + 1) % lan.length)];
-    const pool = healthy.filter((u) => u.startsWith('http://'));
-    return pool[(rrIdx = (rrIdx + 1) % pool.length)];
+    // Browser/PWA: no loopback or LAN relay exists — use any remaining
+    // healthy relay (the Cloudflare Worker, once configured).
+    const rest = healthy.filter((u) => !/127\.0\.0\.1|localhost/.test(u));
+    if (rest.length) return rest[(rrIdx = (rrIdx + 1) % rest.length)];
+    return RELAYS[0] || '';
   }
 
   /* ------------------------------ tiny cache ------------------------------ */
@@ -1793,6 +1829,6 @@ window.MusicEngine = (() => {
     isIndianTrack: isIndian,
     getRelays: () => [...RELAYS],
     relayCount: () => RELAYS.length,
-    __test: { parseSearch, parsePlaylist, parsePipedItems, pickAudioFormat, parseDuration, toTrack, setRelays, musicOnly, stripVersions, parseAlbums, parseAlbumTracks, parsePlaylists },
+    __test: { parseSearch, parsePlaylist, parsePipedItems, pickAudioFormat, parseDuration, toTrack, setRelays, musicOnly, stripVersions, parseAlbums, parseAlbumTracks, parsePlaylists, orderBaked, loadRelays, getRelays: () => [...RELAYS] },
   };
 })();
