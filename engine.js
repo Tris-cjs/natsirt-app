@@ -30,7 +30,7 @@ window.MusicEngine = (() => {
 
   // Cloudflare Worker relay (relay/worker.js) — the browser/iOS path. The
   // Android APK carries its own loopback relay; a browser or PWA (iPhone,
-  // iPad, desktop) has no loopback server, so this Worker is the baked-in
+  // iPad, desktop) has no loopback server, so this Worker is a baked-in
   // relay there. It reliably serves search/chart (server-side calls have no
   // Origin header, so YouTube's browser bot-check never triggers) and its
   // /stream is a best-effort audio source — YouTube bot-checks the player
@@ -41,6 +41,17 @@ window.MusicEngine = (() => {
   // rebuild. A placeholder (contains __YOUR_) is treated as unset.
   const RELAY_WORKER = 'https://__YOUR_WORKER__.workers.dev';
   const workerConfigured = () => !RELAY_WORKER.includes('__YOUR_');
+
+  // PC-resident relay exposed over HTTPS via Cloudflare Tunnel
+  // (cloudflared). The PC's yt-dlp relay has a residential IP — the only
+  // reliably unblocked audio path — and the tunnel makes it reachable as
+  // HTTPS so browsers/PWAs (which refuse plain-HTTP mixed content) can use
+  // it for search/chart AND audio. TEMP: quick-tunnel hostnames rotate on
+  // every cloudflared restart — swap in a named-tunnel URL
+  // (https://relay.<your-domain> with a Cloudflare DNS route) for a
+  // permanent address.
+  const RELAY_TUNNEL = 'https://waters-biggest-dylan-constitution.trycloudflare.com';
+  const tunnelConfigured = () => !RELAY_TUNNEL.includes('__YOUR_');
 
 
   // Public Piped instances, tried in order and rotated past on failure.
@@ -124,19 +135,24 @@ window.MusicEngine = (() => {
   // Pure ordering for the baked relay defaults (testable via __test).
   //   • The on-device loopback relay always comes FIRST when present — it's
   //     the Android APK's own server.
-  //   • The Cloudflare Worker (worker) sits right behind it in the Android
-  //     app and is the FIRST baked relay in a browser/PWA, where no loopback
-  //     server exists.
+  //   • The additional baked relays (tunnel, then Cloudflare Worker) sit
+  //     right behind it in the Android app and are the FIRST baked relays in
+  //     a browser/PWA, where no loopback server exists.
   //   • User-saved relays (from setRelays / saved list) follow the baked
   //     defaults; duplicates collapse.
-  function orderBaked(list, worker) {
+  function orderBaked(list, baked) {
     const out = [...new Set(list)];
     if (RELAY_BAKED && !out.includes(RELAY_BAKED)) out.unshift(RELAY_BAKED);
-    if (worker && !out.includes(worker)) {
-      const at = out.indexOf(RELAY_BAKED);
-      if (at >= 0) out.splice(at + 1, 0, worker);
-      else out.unshift(worker);
-    }
+    // Insert the baked relays as one ordered BLOCK right after the loopback
+    // relay (splicing one-by-one would reverse their order).
+    // Never let a placeholder URL (contains __YOUR_) reach the list — the
+    // baked constants gate on it too, but a caller passing one straight in
+    // (tests, future code) must not poison RELAYS with a dead URL.
+    const insert = (baked || []).filter((b) => b && !b.includes('__YOUR_') && !out.includes(b));
+    if (!insert.length) return out;
+    const at = out.indexOf(RELAY_BAKED);
+    if (at >= 0) out.splice(at + 1, 0, ...insert);
+    else out.unshift(...insert);
     return out;
   }
 
@@ -155,7 +171,14 @@ window.MusicEngine = (() => {
       const legacy = localStorage.getItem('natsirt_relay');
       if (legacy && /^https?:\/\//.test(legacy.trim())) list.push(legacy.trim().replace(/\/+$/, ''));
     } catch { /* ignore */ }
-    RELAYS = orderBaked(list, workerConfigured() ? RELAY_WORKER : '');
+    // The tunnel + Worker relays sit right behind the on-device relay in the
+    // Android app (loopback first) and are the FIRST baked relays in a
+    // browser/PWA, where no loopback server exists. User-saved relays always
+    // win; the baked defaults fill the gaps.
+    const baked = [];
+    if (tunnelConfigured()) baked.push(RELAY_TUNNEL);
+    if (workerConfigured()) baked.push(RELAY_WORKER);
+    RELAYS = orderBaked(list, baked);
   }
   loadRelays();
 
