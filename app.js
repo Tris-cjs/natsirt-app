@@ -942,7 +942,7 @@ function updatePlayingCards() {
     const eq = c.querySelector('.eq');
     if (eq) eq.hidden = !isPlaying;
     const btn = c.querySelector('[data-act="play"]');
-    if (btn) btn.innerHTML = isPlaying && !curEl().paused ? ICON_PAUSE : ICON_PLAY;
+    if (btn) btn.innerHTML = isPlaying && (EmbedPlay.isActive() ? EmbedPlay.isPlaying() : !curEl().paused) ? ICON_PAUSE : ICON_PLAY;
     const likeBtn = c.querySelector('[data-act="like"]');
     if (likeBtn) {
       const liked = isLiked(c.dataset.id);
@@ -3262,6 +3262,177 @@ function muxedStreamUrl(url) {
   return url + (url.includes('?') ? '&' : '?') + 'muxed=1';
 }
 
+/* ------------------------------ embed fallback (no relay needed) ------------------------------ */
+
+// LAST-RESORT playback path: when every relay + direct source fails (PC off,
+// tunnel down, Worker bot-blocked — verified: the whole fallback chain dies
+// on an iPhone when none of them answer), play through YouTube's OWN embed
+// player. A hidden iframe asks YouTube to play the video directly — YouTube
+// serves the audio itself, so NO relay, tunnel, Worker, or PC is involved.
+// Verified on the live site: the embed autoplays, keeps playing while hidden,
+// and needs nothing but YouTube being reachable.
+//
+// Trade-offs vs the relay path (why it's last-resort): it's the VIDEO player
+// hidden off-screen (YouTube may throttle fully-invisible embeds — we keep it
+// 1px-opacity + off-screen, which plays fine in testing), seeking is coarser
+// (no MSE byte ranges), there's no crossfade/preload, and iOS Safari pauses
+// audio when the phone locks or the tab backgrounds (same as any web audio).
+const EmbedPlay = (() => {
+  let apiReady = false;
+  let player = null;       // YT.Player instance
+  let container = null;    // the hidden <div> the player lives in
+  let playing = false;     // currently playing through the embed
+  let current = null;      // { track, videoId, dur } playing now
+  let poll = null;         // seek-line pump while playing
+  let pending = null;      // onStateChange queue while loading
+
+  // Load the IFrame API once; resolves when window.YT is usable.
+  function loadAPI() {
+    if (apiReady) return Promise.resolve();
+    if (loadAPI._p) return loadAPI._p;
+    loadAPI._p = new Promise((resolve) => {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      tag.async = true;
+      // The API calls window.onYouTubeIframeAPIReady when loaded. Stash any
+      // existing handler (other code) and chain ours.
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        apiReady = true;
+        if (prev) prev();
+        resolve();
+      };
+      document.head.appendChild(tag);
+    });
+    return loadAPI._p;
+  }
+
+  // Create the hidden player lazily (only when first needed).
+  function ensurePlayer() {
+    return loadAPI().then(() => new Promise((resolve) => {
+      if (player) return resolve(player);
+      container = document.createElement('div');
+      container.id = 'embed-player';
+      container.style.cssText = 'position:fixed;left:-9999px;top:0;width:240px;height:180px;opacity:0.01;z-index:-1;pointer-events:none';
+      document.body.appendChild(container);
+      player = new YT.Player('embed-player', {
+        width: '240', height: '180',
+        playerVars: { autoplay: 1, playsinline: 1, rel: 0, controls: 0, modestbranding: 1, origin: location.origin },
+        events: {
+          onReady: () => resolve(player),
+          onStateChange: (e) => handleState(e.data),
+          onError: () => {},
+        },
+      });
+    }));
+  }
+
+  function handleState(code) {
+    // YT states: -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued
+    const vidNow = (() => { try { return player && player.getVideoData ? player.getVideoData().video_id : ''; } catch { return ''; } })();
+    if (code === 1) {
+      playing = true;
+      setBuffering(false);
+      updatePlayIcon(true);
+      if (current && current.track) recordPlay(current.track);
+      startPoll();
+      // A play() was waiting for this video to actually start.
+      if (pending && pending.want === vidNow) { const p = pending; pending = null; p.resolve(); }
+    } else if (code === 2) {
+      playing = false;
+      updatePlayIcon(false);
+      stopPoll();
+    } else if (code === 3) {
+      setBuffering(true);
+    } else if (code === 0) {
+      playing = false;
+      updatePlayIcon(false);
+      stopPoll();
+      // A stale 'ended' from the PREVIOUS video (we just switched) must not
+      // advance the queue — only advance when the CURRENT embed video ended.
+      if (!vidNow || (current && vidNow !== current.videoId)) return;
+      nextTrack();
+    }
+  }
+
+  // Pump the seek line + time labels while embed is playing (no timeupdate
+  // events from a hidden iframe — poll getCurrentTime instead).
+  function startPoll() {
+    stopPoll();
+    poll = setInterval(() => {
+      if (!player || !playing || !current) return;
+      try {
+        const t = player.getCurrentTime() || 0;
+        const d = player.getDuration() || current.dur || 0;
+        if (d > 0) {
+          const v = Math.round((t / d) * 1000);
+          if (!npSeekScrubbing) { $('#seek').value = v; $('#np-seek').value = v; }
+          $('#t-cur').textContent = fmtDur(t);
+          $('#t-total').textContent = fmtDur(d);
+          $('#np-t-cur').textContent = fmtDur(t);
+          $('#np-t-total').textContent = fmtDur(d);
+          const pct = Math.min(100, (t / d) * 100);
+          const nsf = $('#np-seek-fill');
+          if (nsf) nsf.style.transform = `translateY(-50%) scaleX(${(pct / 100).toFixed(4)})`;
+          const mpf = $('#mini-progress-fill');
+          if (mpf) mpf.style.transform = `scaleX(${(t / d).toFixed(4)})`;
+          const npf = $('#np-progress-fill');
+          if (npf) npf.style.transform = `scaleX(${(t / d).toFixed(4)})`;
+        }
+      } catch { /* player mid-load */ }
+    }, 500);
+  }
+  function stopPoll() { if (poll) { clearInterval(poll); poll = null; } }
+
+  // Play a track through the embed. Resolves when it actually starts.
+  function play(track) {
+    const vid = track.videoId || (String(track.id || '').startsWith('yt:') ? String(track.id).slice(3) : '');
+    if (!vid) return Promise.reject(new Error('No video id for embed'));
+    current = { track, videoId: vid, dur: track.duration || 0 };
+    setBuffering(true);
+    updatePlayIcon(false);
+    return ensurePlayer().then(() => new Promise((resolve, reject) => {
+      pending = { resolve, reject, want: vid };
+      try {
+        player.loadVideoById(vid);
+        player.setVolume(Math.round((state.userVol || 0.8) * 100));
+        player.playVideo();
+      } catch (e) {
+        if (pending) pending = null;
+        reject(e);
+      }
+      // Safety: if the video never starts within 15s, give up so the app can
+      // show a real error instead of buffering forever.
+      setTimeout(() => {
+        if (pending) { const p = pending; pending = null; p.reject(new Error('Embed timed out')); }
+      }, 15000);
+    }));
+  }
+
+  function isPlaying() { return playing; }
+  function isActive() { return !!player && !!current; }
+  function pause() { try { if (player) player.pauseVideo(); playing = false; updatePlayIcon(false); } catch { /* ignore */ } }
+  function resume() { try { if (player) player.playVideo(); playing = true; updatePlayIcon(true); } catch { /* ignore */ } }
+  function seekTo(sec) { try { if (player) player.seekTo(sec, true); } catch { /* ignore */ } }
+  function currentTime() { try { return player ? (player.getCurrentTime() || 0) : 0; } catch { return 0; } }
+  function duration() { try { return player ? (player.getDuration() || (current && current.dur) || 0) : 0; } catch { return (current && current.dur) || 0; } }
+  // Full stop: unload the video, clear state, remove the player (fresh start
+  // next time — the API stays loaded, only the instance is freed).
+  function stop() {
+    stopPoll();
+    playing = false;
+    current = null;
+    pending = null;
+    try { if (player && player.destroy) player.destroy(); } catch { /* ignore */ }
+    player = null;
+    if (container && container.parentNode) container.parentNode.removeChild(container);
+    container = null;
+  }
+  function setVolume(v) { try { if (player) player.setVolume(Math.round(v * 100)); } catch { /* ignore */ } }
+
+  return { play, pause, resume, seekTo, stop, isActive, isPlaying, currentTime, duration, setVolume };
+})();
+
 // Seek a plain <audio> element once it CAN be seeked. The muxed-fallback
 // stream only becomes seekable after the media stack parses the init (moov at
 // the file tail) — before that, seekable is empty and setting currentTime
@@ -3724,6 +3895,14 @@ async function playTrackAt(i, list) {
     if (track.source === 'youtube') {
       const vid = track.videoId || (track.id && track.id.startsWith('yt:') ? track.id.slice(3) : '');
       if (!vid) throw new Error('No video id for this track');
+      // Already in embed mode (the relay chain is dead this session — PC off
+      // etc.)? Stay in it: retrying the dead chain adds seconds per track.
+      // The embed plays straight from YouTube, so next/prev keep working.
+      if (EmbedPlay.isActive()) {
+        await EmbedPlay.play(track);
+        recordPlay(track);
+        return;
+      }
       // Offline-first: a saved copy plays from a blob URL — instant start,
       // fully seekable, immune to network. Only the network path resolves a
       // stream URL.
@@ -3795,6 +3974,16 @@ async function playTrackAt(i, list) {
     // "Failed to fetch". The audio 'error' listener handles those (retry once,
     // then a clear message + Retry action) — don't double-toast here.
     if (mediaLoadAttempted) return;
+    // LAST RESORT: every relay and direct source failed (PC off, tunnel down,
+    // Worker bot-blocked). Play through YouTube's own embed player — the
+    // hidden iframe plays audio straight from YouTube, no relay involved.
+    if (state.playingId === track.id && track.source === 'youtube' && !EmbedPlay.isActive()) {
+      try {
+        await EmbedPlay.play(track);
+        recordPlay(track);
+        return;
+      } catch (e2) { /* fall through to the error toast */ }
+    }
     const msg = String((e && e.message) || 'Unknown error');
     toast(`Playback failed: ${msg}`, true, { label: 'Retry', fn: retryTrack });
   }
@@ -3806,6 +3995,9 @@ async function playTrackAt(i, list) {
 // the next track is already buffered — play() starts instantly, so the
 // crossfade connects even on slow/bot-checked streams.
 function preloadNextTrack() {
+  // Embed mode can't crossfade/preload a hidden iframe — next/prev just
+  // load the next video on demand. Skip the preload entirely.
+  if (EmbedPlay.isActive()) return;
   if (state.queue.length < 2) return;
   // Repeat-one replays the current track — there is no next track to preload
   // (warming one would just burn a YouTube request for nothing).
@@ -4562,7 +4754,8 @@ function setPlayerTitle(text) {
 // play/pause/like toggles from restarting the animation.
 function syncRowMarquee(el, name, isPlaying) {
   if (!el) return;
-  if (isPlaying && !curEl().paused) {
+  const audible = EmbedPlay.isActive() ? EmbedPlay.isPlaying() : !curEl().paused;
+  if (isPlaying && audible) {
     if (el.dataset.mqName !== name) {
       el.dataset.mqName = name;
       applyMarquee(el, name);
@@ -4691,8 +4884,8 @@ function nextTrack() {
         return;
       }
       // Truly nothing more (offline / fetch failed): stop gracefully.
-      const el = curEl();
-      el.pause();
+      if (EmbedPlay.isActive()) EmbedPlay.pause();
+      else { const el = curEl(); el.pause(); }
       updatePlayIcon(false);
     });
   } else {
@@ -4703,8 +4896,8 @@ function nextTrack() {
 function prevTrack() {
   if (state.index < 0 || state.queue.length === 0) return;
   // If >3s into the track, restart instead of going back
-  const el = curEl();
-  if (el.currentTime > 3) {
+  const t = EmbedPlay.isActive() ? EmbedPlay.currentTime() : curEl().currentTime;
+  if (t > 3) {
     playTrackAt(state.index);
     return;
   }
@@ -4724,6 +4917,8 @@ on('#btn-play', 'click', () => {
 // Seek with MSE awareness: inside the buffered window it's a plain jump;
 // outside it, clear the buffer and re-chunk from the new position.
 function seekPlayerTo(sec) {
+  // Embed mode: the hidden YouTube player seeks itself.
+  if (EmbedPlay.isActive()) { EmbedPlay.seekTo(sec); return; }
   const el = curEl();
   if (!el.duration) return;
   const target = Math.min(el.duration, Math.max(0, sec));
@@ -4776,12 +4971,14 @@ function seekPlayerTo(sec) {
 }
 
 on('#seek', 'change', () => {
-  if (curEl().duration) seekPlayerTo((Number($('#seek').value) / 1000) * curEl().duration);
+  const d = EmbedPlay.isActive() ? EmbedPlay.duration() : curEl().duration;
+  if (d) seekPlayerTo((Number($('#seek').value) / 1000) * d);
 });
 on('#volume', 'input', () => {
   state.userVol = Number($('#volume').value) / 100;
   audio.volume = state.userVol;
   audio2.volume = state.userVol;
+  if (EmbedPlay.isActive()) EmbedPlay.setVolume(state.userVol);
   $('#np-volume').value = $('#volume').value;
   saveSession();
 });
@@ -5538,7 +5735,7 @@ function updateNowPlaying() {
       }
     } else {
       art.classList.add('np-art-in');
-      if (!curEl().paused) art.classList.add('live');
+      if (EmbedPlay.isActive() ? EmbedPlay.isPlaying() : !curEl().paused) art.classList.add('live');
     }
   }
   // Update like buttons (mini player + now-playing heart)
@@ -5607,6 +5804,12 @@ async function artToGradient(src, target) {
 }
 
 function togglePlay() {
+  // Embed mode: the hidden YouTube player owns playback, not <audio>.
+  if (EmbedPlay.isActive()) {
+    if (EmbedPlay.isPlaying()) EmbedPlay.pause();
+    else EmbedPlay.resume();
+    return;
+  }
   const el = curEl();
   if (el.paused) el.play().catch(() => {});
   else el.pause();
@@ -6058,7 +6261,8 @@ on('#np-seek', 'input', () => {
 });
 on('#np-seek', 'change', () => {
   npSeekScrubbing = false;
-  if (curEl().duration) seekPlayerTo((Number($('#np-seek').value) / 1000) * curEl().duration);
+  const d = EmbedPlay.isActive() ? EmbedPlay.duration() : curEl().duration;
+  if (d) seekPlayerTo((Number($('#np-seek').value) / 1000) * d);
 });
 
 /* --- Now Playing: touch-driven cover slide (drag-linked, velocity fling) --- */
@@ -6216,6 +6420,7 @@ on('#np-volume', 'input', () => {
   state.userVol = Number($('#np-volume').value) / 100;
   audio.volume = state.userVol;
   audio2.volume = state.userVol;
+  if (EmbedPlay.isActive()) EmbedPlay.setVolume(state.userVol);
   $('#volume').value = $('#np-volume').value;
 });
 
