@@ -7386,6 +7386,7 @@ function openLibrary() {
   renderLibraryName();
   renderDownloads();
   renderInstallEntry();
+  renderUpdatesSection();
 }
 
 // Library is a full tab now — no drawer. openLibrary() lives in switchTab.
@@ -7477,7 +7478,74 @@ async function checkForUpdates() {
   if (!window.Update || !Update.getUrl()) return;
   const r = await Update.check();
   if (r.status === 'updated') renderUpdateBanner();
+  renderUpdatesSection();
 }
+
+/* ------------------------------ Library: App updates section ------------------------------ */
+
+// The Library's persistent "App updates" entry: shows the running build and
+// an "Update now" button when a newer version is available (the same bundle
+// the top banner offers — this is the always-findable place to check).
+function renderUpdatesSection() {
+  const note = $('#updates-note');
+  const btn = $('#updates-btn');
+  const status = $('#updates-status');
+  if (!note || !btn || !status) return;
+  const cur = (() => {
+    const m = document.querySelector('meta[name="orbeat-build"]');
+    return (m && Number(m.content)) || 0;
+  })();
+  if (!window.Update || !Update.getUrl()) {
+    note.textContent = `Build ${cur}`;
+    status.textContent = 'Self-updates are off for this install.';
+    btn.hidden = true;
+    return;
+  }
+  const o = Update.status(); // a downloaded (not yet applied) bundle
+  note.textContent = `Build ${cur}${o && o.version ? ` → v${o.version} available` : ''}`;
+  if (o && o.newer) {
+    btn.hidden = false;
+    btn.textContent = `Update now (v${o.version})`;
+    status.textContent = 'Downloaded — tap to restart and apply.';
+    return;
+  }
+  // No downloaded bundle (yet): the button runs a fresh check, so it doubles
+  // as a manual "Check for updates" for the persistent entry.
+  btn.hidden = false;
+  btn.textContent = 'Check for updates';
+  status.textContent = '';
+}
+
+on('#updates-btn', 'click', async () => {
+  const btn = $('#updates-btn');
+  const status = $('#updates-status');
+  if (!window.Update || !Update.getUrl()) return;
+  if (Update.status() && Update.status().newer) {
+    // A newer bundle is already downloaded — apply it (matches the banner).
+    toast('Applying update…');
+    setTimeout(() => Update.apply(), 400);
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Checking…';
+  if (status) status.textContent = '';
+  const r = await Update.check();
+  btn.disabled = false;
+  if (r.status === 'updated') {
+    renderUpdateBanner();
+    renderUpdatesSection();
+    toast(`v${r.version} downloaded — tap Update now to apply`);
+  } else if (r.status === 'current') {
+    if (status) status.textContent = 'You\'re up to date.';
+    btn.textContent = 'Check for updates';
+  } else if (r.status === 'disabled') {
+    if (status) status.textContent = 'Self-updates are off for this install.';
+    btn.hidden = true;
+  } else {
+    if (status) status.textContent = 'Couldn\'t check: ' + (r.error || 'unknown error');
+    btn.textContent = 'Try again';
+  }
+});
 
 // Auto-check shortly after launch (after the startup burst settles, so the
 // ~5 file fetches never add to the cold-open spike). No longer applies
@@ -7489,6 +7557,7 @@ if (window.Update && Update.getUrl()) {
 // If a previous session left a downloaded update pending, surface the banner
 // immediately on launch (don't wait for the 12s auto-check).
 renderUpdateBanner();
+renderUpdatesSection();
 on('#pl-name', 'keydown', (e) => {
   if (e.key === 'Enter') $('#pl-create-btn').click();
 });
