@@ -3433,6 +3433,21 @@ const EmbedPlay = (() => {
   return { play, pause, resume, seekTo, stop, isActive, isPlaying, currentTime, duration, setVolume };
 })();
 
+// Shared LAST-RESORT: when the relay/direct chain has failed (PC off, tunnel
+// down, Worker bot-blocked), try the embed player for this track. Returns
+// true if it started. Called from the stream-resolve catch, the <audio>
+// load path, and handleMediaError's exhausted retries.
+async function tryEmbedFallback(track) {
+  if (!track || track.source !== 'youtube') return false;
+  if (state.playingId !== track.id) return false;
+  if (EmbedPlay.isActive()) return true; // already playing through embed
+  try {
+    await EmbedPlay.play(track);
+    recordPlay(track);
+    return true;
+  } catch { return false; }
+}
+
 // Seek a plain <audio> element once it CAN be seeked. The muxed-fallback
 // stream only becomes seekable after the media stack parses the init (moov at
 // the file tail) — before that, seekable is empty and setting currentTime
@@ -3969,21 +3984,15 @@ async function playTrackAt(i, list) {
     // Session resume: the WebView may block autoplay on a cold start (no user
     // gesture yet). Swallow that one — the player bar is ready, one tap away.
     if (state._restoring) { state._restoring = false; return; }
+    // LAST RESORT before ANY failure toast: every relay and direct source
+    // failed (PC off, tunnel down, Worker bot-blocked) — play through
+    // YouTube's own hidden embed player, no relay involved.
+    if (await tryEmbedFallback(track)) return;
     // If the URL already reached the <audio> element, the failure came from
     // the media load itself — Chromium rejects play() there with messages like
     // "Failed to fetch". The audio 'error' listener handles those (retry once,
     // then a clear message + Retry action) — don't double-toast here.
     if (mediaLoadAttempted) return;
-    // LAST RESORT: every relay and direct source failed (PC off, tunnel down,
-    // Worker bot-blocked). Play through YouTube's own embed player — the
-    // hidden iframe plays audio straight from YouTube, no relay involved.
-    if (state.playingId === track.id && track.source === 'youtube' && !EmbedPlay.isActive()) {
-      try {
-        await EmbedPlay.play(track);
-        recordPlay(track);
-        return;
-      } catch (e2) { /* fall through to the error toast */ }
-    }
     const msg = String((e && e.message) || 'Unknown error');
     toast(`Playback failed: ${msg}`, true, { label: 'Retry', fn: retryTrack });
   }
@@ -4471,6 +4480,9 @@ function handleMediaError(el) {
   // Stale error from an aborted load (user already moved to another track)?
   // Don't report/retry the wrong track.
   if (state.playingId !== track.id) return;
+  // The embed fallback took over this track (relay chain dead) — the audio
+  // element's own error/retry loop must stand down, not fight the embed.
+  if (EmbedPlay.isActive() && EmbedPlay.currentTime() >= 0) return;
   const vid = track.videoId || (track.id && track.id.startsWith('yt:') ? track.id.slice(3) : '');
   if (vid) {
     const used = mediaRetries.get(vid) || 0;

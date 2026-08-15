@@ -1,6 +1,6 @@
 # OrBeat PWA — installable everywhere
 
-This folder is the full OrBeat web app (build 273). Host it on any
+This folder is the full OrBeat web app (build 274). Host it on any
 HTTPS static host and it installs on every device with no store and no Mac:
 
 | Device | How to install |

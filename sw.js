@@ -7,13 +7,13 @@
  */
 'use strict';
 
-const CACHE = 'orbeat-mobile-v70'; // v22: OrBeat logo rebrand (orange palette) — bump CACHE whenever a shell asset like logo.png changes, since it has no ?v= cache-buster
+const CACHE = 'orbeat-mobile-v71'; // v22: OrBeat logo rebrand (orange palette) — bump CACHE whenever a shell asset like logo.png changes, since it has no ?v= cache-buster
 const SHELL = [
   './',
   './index.html',
-  './style.css?v=273',
-  './app.js?v=273',
-  './engine.js?v=273',
+  './style.css?v=274',
+  './app.js?v=274',
+  './engine.js?v=274',
   './manifest.json',
   './logo.png',
   './fonts/SpotifyMix-Regular.woff2',
