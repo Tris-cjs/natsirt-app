@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="format-detection" content="telephone=no" />
   <title>OrBeat — free music, no limits</title>
-  <!-- Build version, maintained by scripts/bump-version.mjs?v=264 on every sync.
+  <!-- Build version, maintained by scripts/bump-version.mjs?v=265 on every sync.
        The self-update bootstrap compares the hosted manifest against this. -->
-  <meta name="orbeat-build" content="264" />
+  <meta name="orbeat-build" content="265" />
   <meta name="theme-color" content="#121212" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -18,11 +18,11 @@
   <link rel="manifest" href="./manifest.json" />
   <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
   <link rel="icon" href="./logo.png" />
-  <link rel="stylesheet" href="./style.css?v=264" />
+  <link rel="stylesheet" href="./style.css?v=265" />
 
   <!-- Self-update bootstrap: loads engine/brain/app (+update.js) either from
        the bundled assets or from a NEWER bundle a previous session downloaded
-       and stored locally. See public/update.js?v=264 + scripts/export-update.mjs. -->
+       and stored locally. See public/update.js?v=265 + scripts/export-update.mjs. -->
   <script>
   (function () {
     'use strict';
@@ -52,7 +52,7 @@
     function loadNext(i) {
       if (i >= files.length) return;
       var name = files[i];
-      if (name === plain[4]) { // update.js?v=264 — always bundled
+      if (name === plain[4]) { // update.js?v=265 — always bundled
         var u = document.createElement('script');
         u.src = './update.js?v=' + build;
         u.onload = function () { loadNext(i + 1); };
@@ -60,7 +60,7 @@
         document.head.appendChild(u);
         return;
       }
-      var isCss = name === plain[3]; // style.css?v=264
+      var isCss = name === plain[3]; // style.css?v=265
       if (isCss) {
         if (override) {
           var st = document.createElement('style');
@@ -92,7 +92,7 @@
   <!-- Boot splash: an OrBeat hero intro — logo pops in with an orbiting
        ring, the name rises letter by letter, and a rotating tagline fades
        under it before the whole hero sweeps away to reveal Home
-       (hideBootSplash in app.js?v=264 enforces a minimum display time so the
+       (hideBootSplash in app.js?v=265 enforces a minimum display time so the
        intro always plays in full). -->
   <div class="boot-splash" id="boot-splash" aria-hidden="true">
     <div class="hero">
@@ -126,6 +126,22 @@
 
       <!-- Spotify-style top fade: orange gradient that melts into the base -->
       <div class="page-fade" aria-hidden="true"></div>
+
+      <!-- Install banner — the first thing an iPhone visitor sees. Opens the
+           Share → Add to Home Screen steps; on Android/Chrome it fires the
+           native install prompt. Hides once installed (standalone) or after
+           the user dismisses it. -->
+      <div class="install-banner" id="install-banner" hidden>
+        <span class="ib-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 16.2 6.4 10.6l1.4-1.4 3.2 3.2V3h2v9.4l3.2-3.2 1.4 1.4zM5 19h14v2H5z"/></svg>
+        </span>
+        <div class="ib-text">
+          <div class="ib-title">Install OrBeat</div>
+          <div class="ib-sub">Fullscreen app on your Home Screen</div>
+        </div>
+        <button type="button" class="btn sm primary" id="ib-install">Install</button>
+        <button type="button" class="ib-x" id="ib-dismiss" aria-label="Dismiss" title="Dismiss">✕</button>
+      </div>
 
       <div class="home-head">
         <h1 class="home-greeting" id="home-greeting">Good morning</h1>

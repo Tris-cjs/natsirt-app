@@ -7679,12 +7679,53 @@ window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
   renderInstallEntry();
+  renderInstallBanner();
 });
 
 window.addEventListener('appinstalled', () => {
   deferredPrompt = null;
   renderInstallEntry();
+  renderInstallBanner();
   toast('OrBeat installed 🎉');
+});
+
+/* Install banner — the visible nudge at the top of Home. Shows on first
+ * visits (until dismissed) for iPhone/iPad (opens the Add to Home Screen
+ * steps) and for Chrome/Android (fires the native install prompt). Hides
+ * once the app is installed (standalone). The Library → Install app entry
+ * is the persistent home for this; the banner is just the first-visit hook. */
+const INSTALL_DISMISS_KEY = 'natsirt_install_dismissed';
+
+function renderInstallBanner() {
+  const b = $('#install-banner');
+  if (!b) return;
+  if (isStandalone()) { b.hidden = true; return; } // already installed
+  if (!deferredPrompt && !isIOSDevice()) { b.hidden = true; return; } // no install path
+  try { if (localStorage.getItem(INSTALL_DISMISS_KEY)) { b.hidden = true; return; } } catch { /* ignore */ }
+  b.hidden = false;
+  const btn = $('#ib-install');
+  const sub = b.querySelector('.ib-sub');
+  if (deferredPrompt) {
+    btn.textContent = 'Install';
+    if (sub) sub.textContent = 'Tap Install — no app store needed';
+    btn.onclick = async () => {
+      const p = deferredPrompt;
+      deferredPrompt = null;
+      try { p.prompt(); await p.userChoice; } catch { /* dismissed or unsupported */ }
+      renderInstallEntry();
+      renderInstallBanner();
+    };
+  } else {
+    btn.textContent = 'How to install';
+    if (sub) sub.textContent = 'Fullscreen app on your Home Screen';
+    btn.onclick = openInstallSheet;
+  }
+}
+
+on('#ib-dismiss', 'click', () => {
+  try { localStorage.setItem(INSTALL_DISMISS_KEY, '1'); } catch { /* ignore */ }
+  const b = $('#install-banner');
+  if (b) b.hidden = true;
 });
 
 /* ------------------------------ init ------------------------------ */
@@ -7727,6 +7768,9 @@ window.addEventListener('appinstalled', () => {
   // Boot splash safety net: never leave the logo covering the app, even if
   // every Home row fails to load.
   setTimeout(hideBootSplash, 4500);
+  // Install banner appears as the boot hero lifts (after the splash's own
+  // minimum display time) so iPhone visitors see the install button first.
+  setTimeout(renderInstallBanner, 3200);
   // Remember the previous session: playing track, queue, volume, tab, scroll.
   const s = readSession();
   const restored = s ? restorePlayer(s) : false;
