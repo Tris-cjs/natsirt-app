@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="format-detection" content="telephone=no" />
   <title>OrBeat — free music, no limits</title>
-  <!-- Build version, maintained by scripts/bump-version.mjs?v=263 on every sync.
+  <!-- Build version, maintained by scripts/bump-version.mjs?v=264 on every sync.
        The self-update bootstrap compares the hosted manifest against this. -->
-  <meta name="orbeat-build" content="263" />
+  <meta name="orbeat-build" content="264" />
   <meta name="theme-color" content="#121212" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -18,11 +18,11 @@
   <link rel="manifest" href="./manifest.json" />
   <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
   <link rel="icon" href="./logo.png" />
-  <link rel="stylesheet" href="./style.css?v=263" />
+  <link rel="stylesheet" href="./style.css?v=264" />
 
   <!-- Self-update bootstrap: loads engine/brain/app (+update.js) either from
        the bundled assets or from a NEWER bundle a previous session downloaded
-       and stored locally. See public/update.js?v=263 + scripts/export-update.mjs. -->
+       and stored locally. See public/update.js?v=264 + scripts/export-update.mjs. -->
   <script>
   (function () {
     'use strict';
@@ -52,7 +52,7 @@
     function loadNext(i) {
       if (i >= files.length) return;
       var name = files[i];
-      if (name === plain[4]) { // update.js?v=263 — always bundled
+      if (name === plain[4]) { // update.js?v=264 — always bundled
         var u = document.createElement('script');
         u.src = './update.js?v=' + build;
         u.onload = function () { loadNext(i + 1); };
@@ -60,7 +60,7 @@
         document.head.appendChild(u);
         return;
       }
-      var isCss = name === plain[3]; // style.css?v=263
+      var isCss = name === plain[3]; // style.css?v=264
       if (isCss) {
         if (override) {
           var st = document.createElement('style');
@@ -92,7 +92,7 @@
   <!-- Boot splash: an OrBeat hero intro — logo pops in with an orbiting
        ring, the name rises letter by letter, and a rotating tagline fades
        under it before the whole hero sweeps away to reveal Home
-       (hideBootSplash in app.js?v=263 enforces a minimum display time so the
+       (hideBootSplash in app.js?v=264 enforces a minimum display time so the
        intro always plays in full). -->
   <div class="boot-splash" id="boot-splash" aria-hidden="true">
     <div class="hero">
