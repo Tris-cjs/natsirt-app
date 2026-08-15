@@ -471,15 +471,29 @@ window.MusicEngine = (() => {
     }
   }
 
+  // A REMOTE relay (Cloudflare Tunnel to the PC / Cloudflare Worker / LAN
+  // box) resolves against YouTube from ITS OWN IP — not this phone's — so its
+  // calls must NOT ride the politeness queue: the queue exists to keep THIS
+  // device's IP under YouTube's radar (direct innertube/piped + the on-device
+  // loopback relay all share this phone's IP). Gating remote-relay calls on
+  // the same 900ms gap would serialize a cold open's ~15 home requests and
+  // make the first search wait behind the whole queue (measured: 26s). Only
+  // the loopback relay (this phone's own server, same IP) stays paced.
+  function remoteRelayOf(url) {
+    return RELAYS.find((u) => url.startsWith(u) && !/127\.0\.0\.1|localhost/.test(u));
+  }
+
   async function getJson(url, { retries = 1, timeout = 12000 } = {}) {
     let lastErr;
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        // getJson serves the relay + piped sources — the relay re-resolves
-        // against YouTube from this phone's IP, so its calls must ride the
-        // same politeness queue as the direct innertube path. Each outcome
-        // feeds the Brain so pacing adapts to what YouTube is actually doing.
-        const res = await paced(() => fetchT(url, { credentials: 'omit' }, timeout));
+        // Remote-relay calls skip the politeness queue (see remoteRelayOf);
+        // everything else (direct innertube, piped, the on-device loopback
+        // relay) rides it. Each outcome feeds the Brain so pacing adapts to
+        // what YouTube is actually doing.
+        const res = await (remoteRelayOf(url)
+          ? fetchT(url, { credentials: 'omit' }, timeout)
+          : paced(() => fetchT(url, { credentials: 'omit' }, timeout)));
         if (res.status === 403 || res.status === 401) {
           if (window.Brain) {
             Brain.recordOutcome('block');
@@ -1784,11 +1798,16 @@ window.MusicEngine = (() => {
     // request starts instantly instead of resolving on first tap. The tier is
     // passed so the warm fills the SAME cache key the upcoming play reads
     // (relay caches are tier-tagged — a tier-less warm would be wasted work).
-    // Paced like every other YouTube-facing call — a /warm triggers a player
-    // resolve on the relay's side, so it must not fire unthrottled during the
-    // startup burst (the trending rows used to warm ~9 tracks at once).
+    // Paced like every other YouTube-facing call when the warm hits THIS
+    // phone's own IP (the on-device loopback relay / direct path) — a /warm
+    // triggers a player resolve, so it must not fire unthrottled during the
+    // startup burst (the trending rows used to warm ~9 tracks at once). A
+    // REMOTE relay (tunnel/Worker) resolves from its own IP and skips the
+    // queue, so warming the next track never waits behind home-row requests.
     if (RELAYS.some(relayHealthy)) {
-      paced(() => fetchT(`${preferredRelay()}/warm?videoId=${encodeURIComponent(videoId)}&q=${streamTier()}`, { credentials: 'omit' }, 8000)).catch(() => {});
+      const warmUrl = `${preferredRelay()}/warm?videoId=${encodeURIComponent(videoId)}&q=${streamTier()}`;
+      const fire = () => fetchT(warmUrl, { credentials: 'omit' }, 8000);
+      (remoteRelayOf(warmUrl) ? fire() : paced(fire)).catch(() => {});
     }
   }
 
