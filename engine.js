@@ -282,6 +282,22 @@ window.MusicEngine = (() => {
   // before a flaky one (e.g. a datacenter Worker whose /stream is
   // intermittently bot-blocked). Falls back to round-robin without the Brain.
   function streamOrder(cands) {
+    if (!cands.length) return cands;
+    // The tunnel (RELAY_TUNNEL, a residential-IP PC relay behind Cloudflare
+    // Tunnel) is the RELIABLE streaming path — YouTube's player API streams
+    // from residential IPs but bot-checks most datacenter egress IPs. When a
+    // tunnel is baked in and healthy, it ALWAYS leads the streaming order;
+    // the Cloudflare Worker (and any other relay) is a backup, never the
+    // first pick, because its /stream can 502 mid-session. Learned Brain
+    // health then refines the rest of the order.
+    if (tunnelConfigured()) {
+      const t = cands.filter((u) => u === RELAY_TUNNEL);
+      const rest = cands.filter((u) => u !== RELAY_TUNNEL);
+      if (t.length) return t.concat(streamOrderRest(rest));
+    }
+    return streamOrderRest(cands);
+  }
+  function streamOrderRest(cands) {
     if (window.Brain && Brain.suggestSourceOrder) return Brain.suggestSourceOrder(cands);
     if (!cands.length) return cands;
     const start = (rrIdx = (rrIdx + 1) % cands.length);
@@ -1868,6 +1884,6 @@ window.MusicEngine = (() => {
     isIndianTrack: isIndian,
     getRelays: () => [...RELAYS],
     relayCount: () => RELAYS.length,
-    __test: { parseSearch, parsePlaylist, parsePipedItems, pickAudioFormat, parseDuration, toTrack, setRelays, musicOnly, stripVersions, parseAlbums, parseAlbumTracks, parsePlaylists, orderBaked, loadRelays, getRelays: () => [...RELAYS] },
+    __test: { parseSearch, parsePlaylist, parsePipedItems, pickAudioFormat, parseDuration, toTrack, setRelays, musicOnly, stripVersions, parseAlbums, parseAlbumTracks, parsePlaylists, orderBaked, loadRelays, getRelays: () => [...RELAYS], streamOrder },
   };
 })();
