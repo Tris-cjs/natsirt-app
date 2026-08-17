@@ -800,6 +800,24 @@ img { display: block; }
   .np-ai { overflow-y: visible !important; min-height: 120px; }
   .np-ai-scroll { overflow-y: auto !important; }
   .np-ai-more { z-index: 10001; }
+
+  /* Desktop portal for trivia when moved out of the page flow by JS */
+  #desktop-trivia-portal {
+    position: fixed;
+    right: 24px;
+    top: calc(var(--nav-h) + 24px);
+    width: 360px;
+    max-width: min(40vw, 420px);
+    max-height: calc(100vh - 160px);
+    overflow: auto;
+    z-index: 11000;
+    pointer-events: auto;
+    display: block;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* When the np-ai node is portalled, keep its inner scroll area usable */
+  #desktop-trivia-portal .np-ai { background: var(--panel-bg); border-radius: var(--radius); box-shadow: 0 8px 30px rgba(0,0,0,0.35); }
+  #desktop-trivia-portal .np-ai-scroll { max-height: calc(100vh - 220px); overflow: auto; }
 }
 
 /* iOS-specific small fixes when opened on iPhone/iPad */
