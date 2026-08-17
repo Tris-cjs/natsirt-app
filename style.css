@@ -790,6 +790,18 @@ img { display: block; }
   .search-bar { max-width: 760px; margin-left: 0; margin-right: 0; }
 }
 
+/* Desktop NP/trivia visibility fixes for large screens */
+@media (min-width: 900px) {
+  /* ensure Now Playing overlays float above desktop layout */
+  .np-backdrop { z-index: 9999; position: fixed; }
+  #np-backdrop { z-index: 9999; }
+  .np { z-index: 10000; position: absolute; }
+  /* Make sure the trivia sheet can expand and is not clipped */
+  .np-ai { overflow-y: visible !important; min-height: 120px; }
+  .np-ai-scroll { overflow-y: auto !important; }
+  .np-ai-more { z-index: 10001; }
+}
+
 /* iOS-specific small fixes when opened on iPhone/iPad */
 .is-ios input, .is-ios button, .is-ios select {
   -webkit-tap-highlight-color: rgba(0,0,0,0.05);
