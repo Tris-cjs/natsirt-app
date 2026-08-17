@@ -107,6 +107,18 @@
     else start();
   })();
   </script>
+  <script>
+  // Platform hints: add classes for iOS and desktop to enable platform-specific CSS
+  (function () {
+    try {
+      var isIOS = /iP(ad|hone|od)/.test(navigator.platform) || (navigator.userAgent.indexOf('Mac') !== -1 && 'ontouchend' in document);
+      if (isIOS) document.documentElement.classList.add('is-ios');
+      var updateDesktop = function () { document.documentElement.classList.toggle('is-desktop', window.innerWidth >= 900); };
+      updateDesktop();
+      window.addEventListener('resize', updateDesktop, { passive: true });
+    } catch (e) { /* ignore */ }
+  })();
+  </script>
 </head>
 <body>
   <a href="#content" class="skip-link">Skip to content</a>
