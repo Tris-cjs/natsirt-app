@@ -54,7 +54,7 @@
   --bg-press: #3e3e3e;
   --line: rgba(255, 255, 255, 0.09);
   --text: #ffffff;
-  --text-dim: #b3b3b3;
+  --text-dim: #cfcfcf;
   --text-dimmer: #7a7a7a;
   --accent: #ff6a00;
   --accent-strong: #ff9e00;
@@ -256,6 +256,37 @@ button {
   border: none;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(255, 154, 0, 0.95);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Visible skip-to-content link for keyboard users */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.skip-link:focus {
+  left: 8px;
+  top: 8px;
+  width: auto;
+  height: auto;
+  background: var(--bg-elev);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  z-index: 500;
 }
 
 input { font-family: inherit; }
@@ -728,6 +759,43 @@ img { display: block; }
   aspect-ratio: 1;
   height: auto;
 }
+
+/* Desktop layout tweaks (min-width: 900px) */
+@media (min-width: 900px) {
+  :root {
+    --fs-hero: clamp(28px, 4vw, 40px);
+    --fs-greeting: clamp(28px, 4.5vw, 44px);
+    --fs-xl: clamp(20px, 3.5vw, 30px);
+    --fs-card: clamp(13px, 1.2vw, 16px);
+    --radius: 10px;
+  }
+  .content {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: calc(var(--player-h) + var(--nav-h) + 40px);
+  }
+  .hrow {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 20px;
+    overflow-x: visible;
+    scroll-snap-type: none;
+    padding-left: 0;
+  }
+  .card, .album-card { width: auto; flex: none; }
+  .artists-row { gap: 28px; }
+  .home-chips { position: relative; top: 0; background: transparent; backdrop-filter: none; padding: 8px 0 12px; }
+  .search-bar { max-width: 760px; margin-left: 0; margin-right: 0; }
+}
+
+/* iOS-specific small fixes when opened on iPhone/iPad */
+.is-ios input, .is-ios button, .is-ios select {
+  -webkit-tap-highlight-color: rgba(0,0,0,0.05);
+}
+.is-ios .content { -webkit-overflow-scrolling: touch; }
+.is-ios .search-bar input { -webkit-text-size-adjust: 100%; }
 
 /* ============================== SEARCH ============================== */
 
