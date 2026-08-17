@@ -7421,6 +7421,41 @@ setupMorphDrag($('#genre-view'), $('#genre-view'), closeGenreInstant);
 // Queue page: grip-and-drag reorders the Next Up list.
 setupQueueReorder();
 
+// Desktop trivia portal mover: move the .np-ai node into a fixed portal on wide screens
+(function setupDesktopTriviaPortal(){
+  const portalId = 'desktop-trivia-portal';
+  const npAiId = 'np-ai';
+  function move() {
+    const portal = document.getElementById(portalId);
+    const npAi = document.getElementById(npAiId);
+    const bd = document.getElementById('np-backdrop');
+    if (!portal || !npAi) return;
+    const mq = window.matchMedia('(min-width: 900px)');
+    try {
+      if (mq.matches) {
+        if (portal.contains(npAi)) return;
+        portal.hidden = false; portal.setAttribute('aria-hidden', 'false');
+        portal.appendChild(npAi);
+      } else {
+        // Move back into the Now Playing panel when narrow
+        const panel = bd ? bd.querySelector('.np') : null;
+        if (panel && !panel.contains(npAi)) {
+          // prefer inserting before any .np-ai-fade placeholder if present
+          const fade = panel.querySelector('.np-ai-fade');
+          if (fade) panel.insertBefore(npAi, fade);
+          else panel.appendChild(npAi);
+        }
+        portal.hidden = true; portal.setAttribute('aria-hidden', 'true');
+      }
+    } catch (e) { /* best-effort only */ }
+    if (typeof updateNpAiClip === 'function') { try { updateNpAiClip(); } catch (e) {} }
+  }
+  window.addEventListener('resize', move);
+  document.addEventListener('visibilitychange', move);
+  document.addEventListener('DOMContentLoaded', move);
+  setTimeout(move, 350);
+})();
+
 /* ------------------------------ playlist picker ------------------------------ */
 
 let pickerEl = null;
