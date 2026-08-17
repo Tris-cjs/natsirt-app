@@ -54,7 +54,7 @@
   --bg-press: #3e3e3e;
   --line: rgba(255, 255, 255, 0.09);
   --text: #ffffff;
-  --text-dim: #b3b3b3;
+  --text-dim: #cfcfcf;
   --text-dimmer: #7a7a7a;
   --accent: #ff6a00;
   --accent-strong: #ff9e00;
@@ -256,6 +256,37 @@ button {
   border: none;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(255, 154, 0, 0.95);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Visible skip-to-content link for keyboard users */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.skip-link:focus {
+  left: 8px;
+  top: 8px;
+  width: auto;
+  height: auto;
+  background: var(--bg-elev);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  z-index: 500;
 }
 
 input { font-family: inherit; }

@@ -32,6 +32,13 @@
   <link rel="apple-touch-startup-image" media="(device-width: 834px) and (device-height: 1112px) and (-webkit-device-pixel-ratio: 2)" href="./icons/apple-splash-1668x2224.png" />
   <link rel="apple-touch-startup-image" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2)" href="./icons/apple-splash-1536x2048.png" />
   <link rel="icon" href="./logo.png" />
+  <meta name="description" content="OrBeat — music for every mood. Search, stream, like, and playlist tracks without an account." />
+  <link rel="preload" href="./fonts/SpotifyMix-Regular.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./fonts/SpotifyMix-Bold.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./fonts/SpotifyMix-Extrabold.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./fonts/Inter-Variable.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./fonts/Montserrat-Variable.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./fonts/Sora-Variable.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="./style.css?v=274" />
 
   <!-- Self-update bootstrap: loads engine/brain/app (+update.js) either from
@@ -102,6 +109,7 @@
   </script>
 </head>
 <body>
+  <a href="#content" class="skip-link">Skip to content</a>
 
   <!-- Boot splash: an OrBeat hero intro — logo pops in with an orbiting
        ring, the name rises letter by letter, and a rotating tagline fades
@@ -371,7 +379,7 @@
     <!-- The toast lives INSIDE the mini player: while shown (.toast-open) it
          sits in the panel's grown top area; when the panel retracts, its top
          edge eats the toast (overflow:hidden clips it) — no fade-out. -->
-    <div class="toast" id="toast" hidden></div>
+    <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
     <div class="mini-progress" id="mini-progress">
       <div class="mini-progress-fill" id="mini-progress-fill"></div>
     </div>
