@@ -3440,6 +3440,18 @@ const EmbedPlay = (() => {
 async function tryEmbedFallback(track) {
   if (!track || track.source !== 'youtube') return false;
   if (state.playingId !== track.id) return false;
+
+  // Prefer a non-embed path on iOS to avoid YouTube embed ads: try buffering
+  // the muxed stream via configured relays first. Fall back to the embed
+  // player only if the relay/fetch approach fails.
+  const isIos = typeof document !== 'undefined' && document.documentElement && document.documentElement.classList.contains && document.documentElement.classList.contains('is-ios');
+  if (isIos) {
+    try {
+      await playRelayViaFetch(track);
+      return true;
+    } catch (e) { /* relay/fetch failed — fall through to embed */ }
+  }
+
   if (EmbedPlay.isActive()) return true; // already playing through embed
   try {
     await EmbedPlay.play(track);
