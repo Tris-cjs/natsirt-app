@@ -3447,8 +3447,8 @@ async function tryEmbedFallback(track) {
   const isIos = typeof document !== 'undefined' && document.documentElement && document.documentElement.classList.contains && document.documentElement.classList.contains('is-ios');
   if (isIos) {
     try {
-      await playRelayViaFetch(track);
-      return true;
+      const relayed = await playRelayViaFetch(track);
+      if (relayed) return true;
     } catch (e) { /* relay/fetch failed — fall through to embed */ }
   }
 
@@ -4432,7 +4432,7 @@ async function playRelayViaFetch(track) {
   if (state.playingId !== track.id) return;
   const vid = track.videoId || (track.id && track.id.startsWith('yt:') ? track.id.slice(3) : '');
   const relays = (MusicEngine.getRelays() || []).filter((u) => /^https?:\/\//.test(u));
-  if (!vid || !relays.length) return;
+  if (!vid || !relays.length) return false;
   // Try every relay in turn: the first may be a dead local relay (PC off) —
   // the Cloudflare worker keeps playing when that happens. Each attempt is
   // bounded by a timeout so a hung relay (dead PC on a foreign network) can't
@@ -4468,7 +4468,7 @@ async function playRelayViaFetch(track) {
       setBuffering(true);
       await el.play();
       recordPlay(track);
-      return;
+      return true;
     } catch (e) {
       lastErr = e;
     } finally {
@@ -4477,7 +4477,8 @@ async function playRelayViaFetch(track) {
   }
   if (state.playingId === track.id) {
     const msg = lastErr ? lastErr.message : 'all relays failed';
-    toast(`Playback failed: ${msg}`, true, { label: 'Retry', fn: retryTrack });
+    console.warn(`[relay] all relays failed: ${msg}`);
+    return false;
   }
 }
 
